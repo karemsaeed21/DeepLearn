@@ -247,49 +247,51 @@ const Header: React.FC = () => {
         </div>
 
         {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden mt-4 py-2 border-t border-gray-100 animate-fadeIn">
-            <div className="flex flex-col space-y-2">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className={`px-2 py-3 rounded-md ${
-                    location.pathname === link.path
-                      ? 'bg-indigo-50 text-indigo-700 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  {link.name}
-                </Link>
-              ))}
-              <div className="pt-2 pb-1">
-                <form onSubmit={handleSearch} className="relative mt-3">
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 pr-4 py-2 text-sm bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white w-full transition-all"
-                  />
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                </form>
-                <div className="mt-3 flex space-x-2">
-                  <Link to="/login" className="w-full">
-                    <Button variant="outline" className="w-full">
-                      Login
-                    </Button>
+          {isMenuOpen && (
+            <div
+              className="md:hidden mt-4 py-2 border-t border-gray-100 animate-fadeIn bg-white fixed top-0 left-0 w-full h-full z-40"
+            >
+              <div className="flex flex-col space-y-2 px-4">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    className={`px-2 py-3 rounded-md ${
+                      location.pathname === link.path
+                        ? 'bg-indigo-50 text-indigo-700 font-medium'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {link.name}
                   </Link>
-                  <Link to="/signup" className="w-full">
-                    <Button variant="primary" className="w-full">
-                      Signup
-                    </Button>
-                  </Link>
+                ))}
+                <div className="pt-2 pb-1">
+                  <form onSubmit={handleSearch} className="relative mt-3">
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 pr-4 py-2 text-sm bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white w-full transition-all"
+                    />
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  </form>
+                  <div className="mt-3 flex space-x-2">
+                    <Link to="/login" className="w-full">
+                      <Button variant="outline" className="w-full">
+                        Login
+                      </Button>
+                    </Link>
+                    <Link to="/signup" className="w-full">
+                      <Button variant="primary" className="w-full">
+                        Signup
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </header>
   );
