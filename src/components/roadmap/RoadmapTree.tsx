@@ -403,7 +403,7 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({
       <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-md z-10 max-w-xs">
         <div className="flex items-center gap-2 mb-3">
           <Info className="h-4 w-4 text-indigo-600" />
-          <h3 className="font-semibold text-gray-900">Frontend Roadmap Legend</h3>
+          <h3 className="font-semibold text-gray-900">ML/DL Roadmap Legend</h3>
         </div>
         <ul className="text-sm space-y-2.5">
           <li className="flex items-center gap-2">
