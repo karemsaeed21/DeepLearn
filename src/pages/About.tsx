@@ -7,7 +7,7 @@ const team = [
     name: 'Kareem Mohamed',
     role: 'Computer Science Student',
     bio: 'Passionate about deep learning and its applications in real-world problems.',
-    image: 'src/images/kareem.JPG',
+    image: './src/images/kareem.JPG',
     social: {
       twitter: 'https://x.com/karem_saeed24',
       linkedin: 'https://www.linkedin.com/in/kareem-mohamed-4ac',
@@ -18,7 +18,7 @@ const team = [
     name: 'Abdelrahman Mohamed',
     role: 'Computer Science Student',
     bio: 'Enthusiast in machine learning and data science, focusing on practical applications.',
-    image: 'src/images/bedo.jpg',
+    image: './src/images/bedo.jpg',
     social: {
       twitter: 'https://x.com/ar_exe_',
       linkedin: 'https://www.linkedin.com/in/abdulrahman-khalil-742453252/',
@@ -29,7 +29,7 @@ const team = [
     name: 'Abdallah Sharf',
     role: 'Computer Science Student',
     bio: 'Aspiring data scientist with a keen interest in deep learning technologies.',
-    image: 'src/images/abdallah.jpg',
+    image: './src/images/abdallah.jpg',
     social: {
       twitter: 'https://x.com/mmacode50',
       linkedin: 'https://www.linkedin.com/in/abdallah-sharf/',
