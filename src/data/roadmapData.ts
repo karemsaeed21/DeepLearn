@@ -36,7 +36,94 @@ export const roadmapData: RoadmapNode[] = [
         url: 'https://example.com/python-data-science',
         author: 'Jake Wilson'
       }
-    ]
+    ],
+    roadmap: {
+      beginner: [
+        {
+          id: 'basics-1',
+          title: 'Learn Linear Algebra Basics',
+          subtopics: [
+            {
+              id: 'subtopic-1',
+              title: 'Vectors and Matrices',
+              subtopics: [
+                { id: 'sub-subtopic-1', title: 'Vector Operations' },
+                { id: 'sub-subtopic-2', title: 'Matrix Multiplication' }
+              ]
+            },
+            {
+              id: 'subtopic-2',
+              title: 'Matrix Transformations',
+              subtopics: [
+                { id: 'sub-subtopic-3', title: 'Eigenvalues and Eigenvectors' }
+              ]
+            }
+          ]
+        },
+        {
+          id: 'basics-2',
+          title: 'Understand Probability',
+          subtopics: [
+            {
+              id: 'subtopic-3',
+              title: 'Bayes Theorem',
+              subtopics: [
+                { id: 'sub-subtopic-4', title: 'Conditional Probability' },
+                { id: 'sub-subtopic-5', title: 'Applications of Bayes Theorem' }
+              ]
+            },
+            {
+              id: 'subtopic-4',
+              title: 'Random Variables',
+              subtopics: [
+                { id: 'sub-subtopic-6', title: 'Discrete Random Variables' },
+                { id: 'sub-subtopic-7', title: 'Continuous Random Variables' }
+              ]
+            }
+          ]
+        }
+      ],
+      intermediate: [
+        {
+          id: 'basics-3',
+          title: 'Implement Linear Regression',
+          subtopics: [
+            {
+              id: 'subtopic-5',
+              title: 'Gradient Descent',
+              subtopics: [
+                { id: 'sub-subtopic-8', title: 'Cost Function' },
+                { id: 'sub-subtopic-9', title: 'Learning Rate' }
+              ]
+            }
+          ]
+        }
+      ],
+      advanced: [
+        {
+          id: 'basics-4',
+          title: 'Optimize Machine Learning Models',
+          subtopics: [
+            {
+              id: 'subtopic-6',
+              title: 'Hyperparameter Tuning',
+              subtopics: [
+                { id: 'sub-subtopic-10', title: 'Grid Search' },
+                { id: 'sub-subtopic-11', title: 'Random Search' }
+              ]
+            },
+            {
+              id: 'subtopic-7',
+              title: 'Regularization',
+              subtopics: [
+                { id: 'sub-subtopic-12', title: 'L1 Regularization (Lasso)' },
+                { id: 'sub-subtopic-13', title: 'L2 Regularization (Ridge)' }
+              ]
+            }
+          ]
+        }
+      ]
+    }
   },
   {
     id: 'neural-networks',
@@ -197,16 +284,6 @@ export const roadmapData: RoadmapNode[] = [
         source: 'internal',
         content: 'GANs consist of two networks competing against each other...',
         author: 'Prof. Alex Morgan'
-      },
-      {
-        id: 'gen-2',
-        title: 'Creating Art with Stable Diffusion',
-        type: 'video',
-        source: 'youtube',
-        url: 'https://www.youtube.com/watch?v=example6',
-        thumbnail: 'https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-        duration: '1:05:15',
-        author: 'AI Art Channel'
       },
       {
         id: 'gen-2',
