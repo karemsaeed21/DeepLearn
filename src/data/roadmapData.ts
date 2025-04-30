@@ -1,4 +1,4 @@
-import { RoadmapNode } from '../types';
+import { RoadmapNode } from '../types/index';
 
 export const roadmapData: RoadmapNode[] = [
   {

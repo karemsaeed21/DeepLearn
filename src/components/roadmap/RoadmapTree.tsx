@@ -245,7 +245,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import RoadmapNode from './RoadmapNode';
 import RoadmapConnector from './RoadmapConnector';
-import { RoadmapNode as RoadmapNodeType } from '../../types';
+import { RoadmapNode as RoadmapNodeType } from '../../types/index';
 import { ArrowRight, Info } from 'lucide-react';
 
 interface RoadmapTreeProps {

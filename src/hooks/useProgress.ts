@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect , useCallback} from 'react';
 import { UserProgress } from '../types';
 
 // Mock function to simulate fetching from a real backend
@@ -65,6 +65,7 @@ export const useProgress = () => {
     loadProgress();
   }, []);
 
+
   const markNodeAsCompleted = async (nodeId: string) => {
     const updatedProgress = { ...progress };
     
@@ -101,24 +102,29 @@ export const useProgress = () => {
     return updatedProgress;
   };
 
-  const markSubNodeAsCompleted = async (nodeId: string, subNodeId: string) => {
-    const updatedProgress = { ...progress };
-    
-    if (!updatedProgress.completedSubNodes[nodeId]) {
-      updatedProgress.completedSubNodes[nodeId] = [];
-    }
-    
-    if (!updatedProgress.completedSubNodes[nodeId].includes(subNodeId)) {
-      updatedProgress.completedSubNodes[nodeId] = [
-        ...updatedProgress.completedSubNodes[nodeId],
-        subNodeId,
-      ];
-    }
-    
-    setProgress(updatedProgress);
-    await saveProgress(updatedProgress);
-    
-    return updatedProgress;
+  const markSubNodeAsCompleted = (nodeId: string, subtopicId: string) => {
+    setProgress((prev) => {
+      const completedSubNodes = { ...prev.completedSubNodes };
+
+      // Check if the subtopic is already marked as completed
+      if (completedSubNodes[nodeId]?.includes(subtopicId)) {
+        // Remove the subtopic from the completed list
+        completedSubNodes[nodeId] = completedSubNodes[nodeId].filter((id) => id !== subtopicId);
+
+        // If the list becomes empty, delete the nodeId key
+        if (completedSubNodes[nodeId].length === 0) {
+          delete completedSubNodes[nodeId];
+        }
+      } else {
+        // Add the subtopic to the completed list
+        completedSubNodes[nodeId] = [...(completedSubNodes[nodeId] || []), subtopicId];
+      }
+
+      return {
+        ...prev,
+        completedSubNodes,
+      };
+    });
   };
 
   const toggleSavedContent = async (contentId: string) => {
