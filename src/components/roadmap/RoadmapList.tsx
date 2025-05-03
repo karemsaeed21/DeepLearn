@@ -1,5 +1,5 @@
 import React from 'react';
-import { Step as StepType, Resource } from '../../types/index2';
+import { Step as StepType, Resource } from '../../types/index';
 import Step from './Step';
 
 interface RoadmapListProps {

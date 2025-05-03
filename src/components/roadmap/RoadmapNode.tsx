@@ -139,7 +139,7 @@
 
 
 import React from 'react';
-import { RoadmapNode as RoadmapNodeType } from '../../types/index2';
+import { RoadmapNode as RoadmapNodeType } from '../../types';
 import Badge from '../ui/Badge';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';

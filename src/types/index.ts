@@ -10,15 +10,21 @@ export interface ContentItem {
   author?: string;
 }
 
+export interface Resource {
+  id: string;
+  title: string;
+  url: string;
+  type: 'video' | 'article' | 'book' | 'course' | 'tool' | 'paper';
+}
+
 export interface SubRoadmapNode {
   id: string;
   title: string;
-  description?: string;
-  isCompleted?: boolean;
-  content?: ContentItem[];
-  position?: { x: number; y: number };
-  dependencies?: string[];
-  subtopics?: SubRoadmapNode[]; // Allow nested subtopics
+  description: string;
+  isCompleted: boolean;
+  content: ContentItem[];
+  position: { x: number; y: number };
+  dependencies: string[];
 }
 
 export interface RoadmapNode {
@@ -28,13 +34,19 @@ export interface RoadmapNode {
   isEssential: boolean;
   level: 'beginner' | 'intermediate' | 'advanced';
   position: { x: number; y: number };
-  content: ContentItem[];
   dependencies: string[];
+  content: ContentItem[];
   roadmap?: {
-    beginner?: SubRoadmapNode[];
-    intermediate?: SubRoadmapNode[];
-    advanced?: SubRoadmapNode[];
+    beginner: Subtopic[];
+    intermediate: Subtopic[];
+    advanced: Subtopic[];
   };
+}
+
+export interface Subtopic {
+  id: string;
+  title: string;
+  subtopics?: Subtopic[];
 }
 
 export interface UserProgress {
@@ -44,24 +56,18 @@ export interface UserProgress {
   completedSubNodes: { [nodeId: string]: string[] };
 }
 
-export interface Resource {
-  id: string;
-  title: string;
-  url: string;
-  type: 'video' | 'article' | 'book' | 'course' | 'tool';
-}
-
 export interface Step {
   id: string;
   title: string;
   description: string;
   resources: Resource[];
-  dependencies: string[]; // IDs of steps that should be completed first
-  nextSteps: string[]; // IDs of recommended next steps
-  progress: number; // 0-100
+  dependencies: string[];
+  nextSteps: string[];
+  progress: number;
   completed: boolean;
+  isEssential: boolean; // Added
+  level: 'beginner' | 'intermediate' | 'advanced'; // Added
 }
-
 export interface RoadmapSection {
   id: string;
   title: string;
@@ -69,7 +75,6 @@ export interface RoadmapSection {
   steps: Step[];
   progress: number; // 0-100
 }
-
 export interface Roadmap {
   id: string;
   title: string;

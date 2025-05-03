@@ -1,10 +1,10 @@
 import React, { useState} from 'react';
 import { ArrowLeft, BookOpen, CheckCircle2 } from 'lucide-react';
 import { Step as StepType } from '../../types';
-import Card, { CardHeader, CardTitle, CardDescription, CardContent } from '../ui2/Card';
-import Button from '../ui2/Button';
-import ProgressBar from '../ui2/ProgressBar';
-import Badge from '../ui2/Badge';
+import Card, { CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card2';
+import Button from '../ui/Button';
+import ProgressBar from '../ui/ProgressBar';
+import Badge from '../ui/Badge';
 
 interface SubRoadmapProps {
   mainStep: StepType;
@@ -152,7 +152,7 @@ const SubRoadmap: React.FC<SubRoadmapProps> = ({
                         
                         <div className="flex justify-between items-center">
                           <Badge 
-                            variant={subStep.completed ? 'success' : 'default'}
+                            variant={subStep.completed ? 'success' : 'primary'}
                             className="font-normal"
                           >
                             {subStep.completed ? 'Completed' : 'Not Completed'}

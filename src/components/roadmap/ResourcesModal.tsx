@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, ExternalLink, Video, BookOpen, GraduationCap, PenTool as Tool } from 'lucide-react';
-import { Resource } from '../../types/index2';
-import Button from '../ui2/Button';
+import { Resource } from '../../types/index';
+import Button from '../ui/Button';
 
 interface ResourcesModalProps {
   resources: Resource[];
@@ -36,7 +36,7 @@ const ResourcesModal: React.FC<ResourcesModalProps> = ({ resources, onClose }) =
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h3 className="text-xl font-semibold text-gray-900">Learning Resources</h3>
           <Button 
-            variant="ghost" 
+            variant="outline" 
             size="sm" 
             onClick={onClose}
             className="rounded-full w-8 h-8 p-0 flex items-center justify-center"

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Check, ChevronRight, BookOpen, Video, ExternalLink, GraduationCap, PenTool as Tool } from 'lucide-react';
-import { Step as StepType, Resource } from '../../types/index2';
-import Card, { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui2/Card';
-import Button from '../ui2/Button';
-import ProgressBar from '../ui2/ProgressBar';
-import Badge from '../ui2/Badge';
+import { Step as StepType, Resource } from '../../types/index';
+import Card, { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/Card2';
+import Button from '../ui/Button';
+import ProgressBar from '../ui/ProgressBar';
+import Badge from '../ui/Badge';
 
 interface StepProps {
   step: StepType;
@@ -54,7 +54,7 @@ const Step: React.FC<StepProps> = ({
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle>{step.title}</CardTitle>
-          <Badge variant={step.completed ? 'success' : 'default'}>
+          <Badge variant={step.completed ? 'success' : 'primary'}>
             {step.completed ? 'Completed' : 'In Progress'}
           </Badge>
         </div>
