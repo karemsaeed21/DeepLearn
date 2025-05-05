@@ -1,3 +1,5 @@
+// --- Core Content Interfaces ---
+
 export interface ContentItem {
   id: string;
   title: string;
@@ -17,14 +19,24 @@ export interface Resource {
   type: 'video' | 'article' | 'book' | 'course' | 'tool' | 'paper';
 }
 
+// --- Hierarchical Content Structure ---
+
+export interface Subtopic {
+  id: string;
+  title: string;
+  subtopics?: Subtopic[];
+}
+
+// --- Node Definitions ---
+
 export interface SubRoadmapNode {
   id: string;
   title: string;
   description: string;
   isCompleted: boolean;
-  content: ContentItem[];
   position: { x: number; y: number };
   dependencies: string[];
+  content: ContentItem[];
 }
 
 export interface RoadmapNode {
@@ -43,11 +55,7 @@ export interface RoadmapNode {
   };
 }
 
-export interface Subtopic {
-  id: string;
-  title: string;
-  subtopics?: Subtopic[];
-}
+// --- Progress Tracking ---
 
 export interface UserProgress {
   completedNodes: string[];
@@ -56,29 +64,33 @@ export interface UserProgress {
   completedSubNodes: { [nodeId: string]: string[] };
 }
 
+// --- Roadmap Breakdown ---
+
 export interface Step {
   id: string;
   title: string;
   description: string;
+  level: 'beginner' | 'intermediate' | 'advanced';
+  isEssential: boolean;
+  progress: number;
+  completed: boolean;
   resources: Resource[];
   dependencies: string[];
   nextSteps: string[];
-  progress: number;
-  completed: boolean;
-  isEssential: boolean; // Added
-  level: 'beginner' | 'intermediate' | 'advanced'; // Added
 }
+
 export interface RoadmapSection {
   id: string;
   title: string;
   description: string;
+  progress: number; // 0 - 100
   steps: Step[];
-  progress: number; // 0-100
 }
+
 export interface Roadmap {
   id: string;
   title: string;
   description: string;
+  progress: number; // 0 - 100
   sections: RoadmapSection[];
-  progress: number; // 0-100
 }

@@ -22,18 +22,12 @@ const Step: React.FC = () => {
   const { nodeId } = useParams<{ nodeId: string }>();
   const [currentNode, setCurrentNode] = useState<RoadmapNode | null>(null);
   const [nextNodes, setNextNodes] = useState<RoadmapNode[]>([]);
-  // const [setExpandedLevel] = useState<string | null>(null);
-  // const [setExpandedTopic] = useState<string | null>(null);
   const { progress, markNodeAsCompleted, markNodeAsInProgress, toggleSavedContent } = useProgress();
   const navigate = useNavigate();
   const [viewingResources, setViewingResources] = useState<Resource[] | null>(null);
   const [viewingStep , setViewingStep] = useState<Step | null>(null);
   const [roadmap , setRoadmap] = useState(sampleRoadmap);
-  const [activeSection ] = useState(roadmap.sections[0].id);
   const [activeStepId , setActiveStepId] = useState<string | null>(null);
-
-
-
 
 
   useEffect(() => {
@@ -60,20 +54,9 @@ const Step: React.FC = () => {
     }
   };
   const fadeInUpStyles = "animate-fadeInUp";
-
-
   const handleBookmark = (contentId: string) => {
     toggleSavedContent(contentId);
   };
-
-  // const toggleLevel = (level: string) => {
-  //   setExpandedLevel((prev) => (prev === level ? null : level));
-  //   setExpandedTopic(null); // Reset expanded topic when switching levels
-  // };
-
-  // const toggleTopic = (topicId: string) => {
-  //   setExpandedTopic((prev) => (prev === topicId ? null : topicId));
-  // };
   const handleBackToRoadmap = () => {
     setViewingStep(null);
   };
@@ -310,4 +293,3 @@ const renderSubtopics = (subtopics: any[]) => {
   );
 }; 
 export default Step;
-

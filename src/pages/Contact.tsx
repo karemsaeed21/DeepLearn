@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import Button from '../components/ui/Button';
-import { Mail, MessageSquare, MapPin, Phone } from 'lucide-react';
+import { Mail, MessageSquare} from 'lucide-react';
 
 const Contact: React.FC = () => {
   return (

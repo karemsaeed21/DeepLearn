@@ -62,12 +62,20 @@ const Articles: React.FC = () => {
     },
     saved: false
   });
+  const [search, setSearch] = useState('');
 
   const filteredArticles = articles.filter(article => {
-    if (filters.saved && !progress.savedContent.includes(article.id)) {
-      return false;
-    }
-    return filters.source[article.source as keyof typeof filters.source];
+    if (filters.saved && !progress.savedContent.includes(article.id)) return false;
+    if (!filters.source[article.source as keyof typeof filters.source]) return false;
+    if (
+      search &&
+      !(
+        article.title.toLowerCase().includes(search.toLowerCase()) ||
+        article.author.toLowerCase().includes(search.toLowerCase()) ||
+        (article.content && article.content.toLowerCase().includes(search.toLowerCase()))
+      )
+    ) return false;
+    return true;
   });
 
   return (
@@ -89,6 +97,14 @@ const Articles: React.FC = () => {
             Filters
           </Button>
         </div>
+
+        <input
+          type="text"
+          placeholder="Search articles..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="mb-4 border rounded px-3 py-2 w-full md:w-1/2"
+        />
 
         {showFilters && (
           <div className="bg-gray-50 p-4 rounded-lg mb-6 animate-fadeIn">

@@ -1,40 +1,41 @@
-import { useState, useEffect , useCallback} from 'react';
+import { useState, useEffect } from 'react';
 import { UserProgress } from '../types';
 
-// Mock function to simulate fetching from a real backend
+// Utility functions
+const getFromLocalStorage = (key: string): any => {
+  const value = localStorage.getItem(key);
+  return value ? JSON.parse(value) : null;
+};
+
+const setToLocalStorage = (key: string, value: any) => {
+  localStorage.setItem(key, JSON.stringify(value));
+};
+
+// Simulate backend API delay
 const fetchProgress = (): Promise<UserProgress> => {
   return new Promise((resolve) => {
-    // Simulate API delay
     setTimeout(() => {
-      // Try to get from localStorage first
-      const savedProgress = localStorage.getItem('user-progress');
-      
-      if (savedProgress) {
-        resolve(JSON.parse(savedProgress));
+      const saved = getFromLocalStorage('user-progress');
+      if (saved) {
+        resolve(saved);
       } else {
-        // Default initial state if nothing saved
         const initialProgress: UserProgress = {
           completedNodes: [],
           inProgressNodes: ['basics'],
           savedContent: [],
           completedSubNodes: {},
         };
-        
-        // Save to localStorage
-        localStorage.setItem('user-progress', JSON.stringify(initialProgress));
-        
+        setToLocalStorage('user-progress', initialProgress);
         resolve(initialProgress);
       }
     }, 300);
   });
 };
 
-// Mock function to simulate saving to a real backend
 const saveProgress = (progress: UserProgress): Promise<void> => {
   return new Promise((resolve) => {
-    // Simulate API delay
     setTimeout(() => {
-      localStorage.setItem('user-progress', JSON.stringify(progress));
+      setToLocalStorage('user-progress', progress);
       resolve();
     }, 300);
   });
@@ -47,7 +48,7 @@ export const useProgress = () => {
     savedContent: [],
     completedSubNodes: {},
   });
-  
+
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -55,95 +56,68 @@ export const useProgress = () => {
       try {
         const data = await fetchProgress();
         setProgress(data);
-      } catch (error) {
-        console.error('Failed to load progress:', error);
+      } catch (err) {
+        console.error('Failed to load progress:', err);
       } finally {
         setIsLoading(false);
       }
     };
-    
     loadProgress();
   }, []);
 
-
   const markNodeAsCompleted = async (nodeId: string) => {
-    const updatedProgress = { ...progress };
-    
-    // Remove from inProgress if it's there
-    updatedProgress.inProgressNodes = updatedProgress.inProgressNodes.filter(
-      (id) => id !== nodeId
-    );
-    
-    // Add to completed if not already there
-    if (!updatedProgress.completedNodes.includes(nodeId)) {
-      updatedProgress.completedNodes = [...updatedProgress.completedNodes, nodeId];
+    const updated = { ...progress };
+
+    updated.inProgressNodes = updated.inProgressNodes.filter(id => id !== nodeId);
+
+    if (!updated.completedNodes.includes(nodeId)) {
+      updated.completedNodes.push(nodeId);
     }
-    
-    setProgress(updatedProgress);
-    await saveProgress(updatedProgress);
-    
-    return updatedProgress;
+
+    setProgress(updated);
+    await saveProgress(updated);
+    return updated;
   };
 
   const markNodeAsInProgress = async (nodeId: string) => {
-    const updatedProgress = { ...progress };
-    
-    // Only mark as in progress if not already completed
-    if (!updatedProgress.completedNodes.includes(nodeId)) {
-      // Add to inProgress if not already there
-      if (!updatedProgress.inProgressNodes.includes(nodeId)) {
-        updatedProgress.inProgressNodes = [...updatedProgress.inProgressNodes, nodeId];
-      }
+    const updated = { ...progress };
+
+    if (!updated.completedNodes.includes(nodeId) && !updated.inProgressNodes.includes(nodeId)) {
+      updated.inProgressNodes.push(nodeId);
     }
-    
-    setProgress(updatedProgress);
-    await saveProgress(updatedProgress);
-    
-    return updatedProgress;
+
+    setProgress(updated);
+    await saveProgress(updated);
+    return updated;
   };
 
-  const markSubNodeAsCompleted = (nodeId: string, subtopicId: string) => {
-    setProgress((prev) => {
-      const completedSubNodes = { ...prev.completedSubNodes };
+  const markSubNodeAsCompleted = async (nodeId: string, subNodeId: string) => {
+    const updated = { ...progress };
 
-      // Check if the subtopic is already marked as completed
-      if (completedSubNodes[nodeId]?.includes(subtopicId)) {
-        // Remove the subtopic from the completed list
-        completedSubNodes[nodeId] = completedSubNodes[nodeId].filter((id) => id !== subtopicId);
+    if (!updated.completedSubNodes[nodeId]) {
+      updated.completedSubNodes[nodeId] = [];
+    }
 
-        // If the list becomes empty, delete the nodeId key
-        if (completedSubNodes[nodeId].length === 0) {
-          delete completedSubNodes[nodeId];
-        }
-      } else {
-        // Add the subtopic to the completed list
-        completedSubNodes[nodeId] = [...(completedSubNodes[nodeId] || []), subtopicId];
-      }
+    if (!updated.completedSubNodes[nodeId].includes(subNodeId)) {
+      updated.completedSubNodes[nodeId].push(subNodeId);
+    }
 
-      return {
-        ...prev,
-        completedSubNodes,
-      };
-    });
+    setProgress(updated);
+    await saveProgress(updated);
+    return updated;
   };
 
   const toggleSavedContent = async (contentId: string) => {
-    const updatedProgress = { ...progress };
-    
-    if (updatedProgress.savedContent.includes(contentId)) {
-      // Remove from saved
-      updatedProgress.savedContent = updatedProgress.savedContent.filter(
-        (id) => id !== contentId
-      );
-    } else {
-      // Add to saved
-      updatedProgress.savedContent = [...updatedProgress.savedContent, contentId];
-    }
-    
-    setProgress(updatedProgress);
-    await saveProgress(updatedProgress);
-    
-    return updatedProgress;
+    const updated = { ...progress };
+    const isSaved = updated.savedContent.includes(contentId);
+
+    updated.savedContent = isSaved
+      ? updated.savedContent.filter(id => id !== contentId)
+      : [...updated.savedContent, contentId];
+
+    setProgress(updated);
+    await saveProgress(updated);
+    return updated;
   };
 
   const resetProgress = async () => {
@@ -153,11 +127,18 @@ export const useProgress = () => {
       savedContent: [],
       completedSubNodes: {},
     };
-    
+
     setProgress(initialProgress);
     await saveProgress(initialProgress);
-    
     return initialProgress;
+  };
+
+  const markNodeAsIncomplete = async (nodeId: string) => {
+    const updated = { ...progress };
+    updated.completedNodes = updated.completedNodes.filter(id => id !== nodeId);
+    setProgress(updated);
+    await saveProgress(updated);
+    return updated;
   };
 
   return {
@@ -168,5 +149,6 @@ export const useProgress = () => {
     markSubNodeAsCompleted,
     toggleSavedContent,
     resetProgress,
+    markNodeAsIncomplete,
   };
 };
