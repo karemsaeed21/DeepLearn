@@ -259,77 +259,194 @@ const FloatingChatbot: React.FC = () => {
     }]);
   };
 
-  const sendMessage = async (inputText: string) => {
-    if (!inputText.trim()) return;
-    
-    const userMessage = { 
-      role: 'user', 
-      content: inputText,
-      timestamp: new Date()
-    };
-    
-    const newMessages = [...messages, userMessage];
-    setMessages([...newMessages, { role: 'assistant', content: '' }]);
-    setLoading(true);
+  // Assume 'messages' is your state variable (e.g., from useState<Message[]>)
+// interface Message { role: 'user' | 'assistant'; content: string; timestamp: Date; }
 
-    try {
-      const res = await fetch('http://localhost:11434/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gemma3:4b',
-          messages: newMessages.map(({ role, content }) => ({ role, content })),
-        }),
-      });
+const sendMessage = async (inputText: string) => {
+  if (!inputText.trim()) return;
 
-      if (!res.body) throw new Error('Response body is null');
+  const userMessage = {
+    role: 'user' as const,
+    content: inputText,
+    timestamp: new Date()
+  };
 
-      const reader = res.body.getReader();
-      let buffer = '';
-      let assistantContent = '';
+  // --- CRITICAL FIX for "empty text parameter" ---
+  // Prepare messages for the API:
+  // 1. Include the current user message.
+  // 2. Filter out any messages (from history or current) that have empty/whitespace content.
+  const messagesToSendToApi = [...messages, userMessage]
+    .filter(msg => msg.content && msg.content.trim() !== '');
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += new TextDecoder().decode(value);
+  // If, after filtering, there are no messages with content, don't make the API call.
+  if (messagesToSendToApi.length === 0) {
+    console.warn("No valid messages with content to send to the API. Aborting.");
+    // Optionally set an error message in your UI if desired
+    // setLoading(false); // If you set it true before this check
+    return;
+  }
 
-        let lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+  // Update UI optimistically with user message and an empty assistant message placeholder
+  setMessages(currentMessages => [...currentMessages, userMessage, { role: 'assistant', content: '', timestamp: new Date() }]);
+  setLoading(true);
+  let accumulatedAssistantContent = ''; // Accumulator for streamed content
 
-        for (const line of lines) {
-          if (!line.trim()) continue;
+  // --- VERY IMPORTANT SECURITY WARNING ---
+  // You have publicly shared your API key: AIzaSyDP5-ltToP59wrwEXQzX7UWfebYhSL_ZpU
+  // 1. REVOKE THIS KEY IMMEDIATELY in your Google Cloud Console.
+  // 2. NEVER embed API keys directly in client-side JavaScript code for production or public repositories.
+  //    They can be easily stolen. Use a backend proxy or serverless function.
+  // For this example, I will use a placeholder. Replace it with your NEW, SECURE key for testing.
+  const API_KEY = "AIzaSyDP5-ltToP59wrwEXQzX7UWfebYhSL_ZpU"; // Replace with your actual, new, and secured API key
+
+  try {
+    // For debugging: Log what's actually being sent
+    console.log("Payload to Gemini API:", JSON.stringify({
+      contents: messagesToSendToApi.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
+      }))
+    }, null, 2));
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:streamGenerateContent?key=${API_KEY}&alt=sse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: messagesToSendToApi.map(msg => ({ // Use the filtered list
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        })),
+        generationConfig: {
+          // temperature: 0.9, // Example
+          // topK: 1,          // Example
+          // topP: 1,          // Example
+          // maxOutputTokens: 2048, // Example
+        },
+        safetySettings: [ // Adjust as needed, these are examples
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        ]
+      }),
+    });
+
+    if (!res.ok) {
+        const errorBody = await res.text(); // Get raw error body for better debugging
+        let errorJson = {};
+        try {
+            errorJson = JSON.parse(errorBody);
+        } catch (e) {
+            console.warn("Could not parse error response as JSON:", errorBody);
+        }
+        console.error('API Error Response Status:', res.status);
+        console.error('API Error Response Body:', errorJson.error || errorBody);
+        throw new Error(`API request failed with status ${res.status}: ${ (errorJson as any).error?.message || res.statusText || 'Unknown API error'}`);
+    }
+
+    if (!res.body) throw new Error('Response body is null');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let eolIndex;
+      while ((eolIndex = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.substring(0, eolIndex).trim();
+        buffer = buffer.substring(eolIndex + 1);
+
+        if (line.startsWith('data: ')) {
+          const jsonString = line.substring('data: '.length);
+          if (!jsonString.trim() || jsonString.trim() === '[DONE]') continue; // Gemini might send [DONE]
+
           try {
-            const json = JSON.parse(line);
-            if (json.message?.content) {
-              assistantContent += json.message.content;
+            const json = JSON.parse(jsonString);
+            const textChunk = json.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (textChunk) {
+              accumulatedAssistantContent += textChunk;
               setMessages(current => {
                 const updated = [...current];
-                updated[updated.length - 1] = { 
-                  role: 'assistant', 
-                  content: assistantContent,
-                  timestamp: new Date()
-                };
+                if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
+                  updated[updated.length - 1] = {
+                    role: 'assistant',
+                    content: accumulatedAssistantContent,
+                    timestamp: new Date()
+                  };
+                }
                 return updated;
               });
             }
+            if (json.error) { // Check for errors within the stream
+                console.error("Error in stream from API:", json.error);
+                accumulatedAssistantContent += `\n[API Error: ${json.error.message || 'Unknown error in stream'}]`;
+                // Update UI with the error content
+                setMessages(current => {
+                    const updated = [...current];
+                    if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
+                        updated[updated.length - 1] = {
+                            role: 'assistant',
+                            content: accumulatedAssistantContent,
+                            timestamp: new Date()
+                        };
+                    }
+                    return updated;
+                });
+            }
           } catch (e) {
-            console.error('Error parsing JSON:', e);
+            console.error('Error parsing JSON line from stream:', jsonString, e);
+            // Potentially add problematic string to UI for debugging if needed
           }
         }
       }
-    } catch (err) {
-      setMessages(current => [
-        ...current.slice(0, -1),
-        { 
-          role: 'assistant', 
-          content: 'I apologize, but I seem to be having trouble connecting. Please try again in a moment.',
-          timestamp: new Date()
-        }
-      ]);
     }
-    
+    // Ensure final content is set if loop finishes without a final update
+    if (accumulatedAssistantContent && (!messages.length || messages[messages.length -1].content !== accumulatedAssistantContent)) {
+        setMessages(current => {
+            const updated = [...current];
+            if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
+                updated[updated.length - 1].content = accumulatedAssistantContent; // Ensure final content
+            }
+            return updated;
+        });
+    }
+
+  } catch (err: any) {
+    console.error('Overall error in sendMessage:', err);
+    setMessages(current => {
+      const updatedMessages = [...current];
+      // Ensure we're updating the last (placeholder) assistant message
+      if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role === 'assistant') {
+        updatedMessages[updatedMessages.length - 1] = {
+          role: 'assistant',
+          content: `I apologize, but I seem to be having trouble: ${err.message || 'Please try again in a moment.'}`,
+          timestamp: new Date()
+        };
+        return updatedMessages;
+      } else {
+        // Fallback if something unexpected happened to the messages array
+        return [
+          ...current,
+          {
+            role: 'assistant',
+            content: `I apologize, but I seem to be having trouble: ${err.message || 'Please try again in a moment.'}`,
+            timestamp: new Date()
+          }
+        ];
+      }
+    });
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   return (
     <>
