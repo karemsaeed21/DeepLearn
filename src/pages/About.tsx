@@ -14,28 +14,28 @@ const team = [
       github: 'https://github.com/karemsaeed21'
     }
   },
-  {
-    name: 'Abdelrahman Mohamed',
-    role: 'Computer Science Student',
-    bio: 'Enthusiast in machine learning and data science, focusing on practical applications.',
-    image: '/images/bedo.jpg',
-    social: {
-      twitter: 'https://x.com/ar_exe_',
-      linkedin: 'https://www.linkedin.com/in/abdulrahman-khalil-742453252/',
-      github: 'https://github.com/ar-exe'
-    }
-  },
-  {
-    name: 'Abdallah Sharf',
-    role: 'Computer Science Student',
-    bio: 'Aspiring data scientist with a keen interest in deep learning technologies.',
-    image: '/images/abdallah.jpg',
-    social: {
-      twitter: 'https://x.com/mmacode50',
-      linkedin: 'https://www.linkedin.com/in/abdallah-sharf/',
-      github: 'https://github.com/AbdallahSharf'
-    }
-  }
+  // {
+  //   name: 'Abdelrahman Mohamed',
+  //   role: 'Computer Science Student',
+  //   bio: 'Enthusiast in machine learning and data science, focusing on practical applications.',
+  //   image: '/images/bedo.jpg',
+  //   social: {
+  //     twitter: 'https://x.com/ar_exe_',
+  //     linkedin: 'https://www.linkedin.com/in/abdulrahman-khalil-742453252/',
+  //     github: 'https://github.com/ar-exe'
+  //   }
+  // },
+  // {
+  //   name: 'Abdallah Sharf',
+  //   role: 'Computer Science Student',
+  //   bio: 'Aspiring data scientist with a keen interest in deep learning technologies.',
+  //   image: '/images/abdallah.jpg',
+  //   social: {
+  //     twitter: 'https://x.com/mmacode50',
+  //     linkedin: 'https://www.linkedin.com/in/abdallah-sharf/',
+  //     github: 'https://github.com/AbdallahSharf'
+  //   }
+  // }
 ];
 
 const About: React.FC = () => {
