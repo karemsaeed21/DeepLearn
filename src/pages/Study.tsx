@@ -21,6 +21,7 @@ import {
   FolderPlus,
   Undo2,
   Sparkles,
+  Copy,
   Clipboard,
 } from 'lucide-react';
 
@@ -94,7 +95,7 @@ const Notes: React.FC = () => {
     const savedTrashed = localStorage.getItem('trashed-notes');
     return savedTrashed ? JSON.parse(savedTrashed) : [];
   });
-
+  
   const editor = useEditor({
     extensions: [StarterKit],
     content: activeNote?.content || '',
@@ -120,6 +121,23 @@ const Notes: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('note-folders', JSON.stringify(folders));
   }, [folders]);
+
+  useEffect(() => {
+  const handleNotesUpdated = () => {
+    const savedNotes = localStorage.getItem('learning-notes');
+    if (savedNotes) {
+      setNotes(JSON.parse(savedNotes));
+    }
+  };
+
+  // Add event listener
+  window.addEventListener('notesUpdated', handleNotesUpdated);
+
+  // Cleanup
+  return () => {
+    window.removeEventListener('notesUpdated', handleNotesUpdated);
+  };
+}, []);
 
   useEffect(() => {
     if (editor && activeNote?.content !== editor.getHTML()) {

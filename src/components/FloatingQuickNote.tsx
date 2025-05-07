@@ -6,7 +6,6 @@ const FloatingQuickNote: React.FC = () => {
   const [showQuickNoteModal, setShowQuickNoteModal] = useState(false);
   const [quickNoteTitle, setQuickNoteTitle] = useState('');
   const [quickNoteContent, setQuickNoteContent] = useState('');
-  // const [isOpen] = useState(false);
 
   const handleSaveQuickNote = () => {
     const newNote = {
@@ -21,6 +20,12 @@ const FloatingQuickNote: React.FC = () => {
     const updatedNotes = [newNote, ...savedNotes];
     localStorage.setItem('learning-notes', JSON.stringify(updatedNotes));
 
+    // Dispatch custom event to notify other components
+    window.dispatchEvent(new CustomEvent('notesUpdated', {
+      detail: { newNote }
+    }));
+
+    // Reset form and close modal
     setQuickNoteTitle('');
     setQuickNoteContent('');
     setShowQuickNoteModal(false);
@@ -29,8 +34,7 @@ const FloatingQuickNote: React.FC = () => {
   return (
     <>
       {/* Floating Button */}
-      <div 
-      >
+      <div>
         <button
           className={`fixed bottom-4 right-7 z-50 w-16 h-16
                    bg-gradient-to-br from-indigo-600 to-violet-600 
@@ -55,6 +59,7 @@ const FloatingQuickNote: React.FC = () => {
               onChange={(e) => setQuickNoteTitle(e.target.value)}
               placeholder="Note Title"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveQuickNote()}
             />
             <textarea
               value={quickNoteContent}
