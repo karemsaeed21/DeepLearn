@@ -2,8 +2,9 @@ import React from 'react';
 
 interface ButtonProps {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'outline' | 'text';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: 'primary' | 'secondary' | 'outline' | 'text' | 'ghost';
+  size?: 'sm' | 'md' | 'lg' | 'icon';
+  title?: string;
   onClick?: () => void;
   className?: string;
   disabled?: boolean;
@@ -39,7 +40,7 @@ const Button: React.FC<ButtonProps> = ({
   return (
     <button
       type={type}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabledClasses} ${className}`}
+      className={`${baseClasses} ${variantClasses[variant as 'primary' | 'secondary' | 'outline' | 'text']} ${sizeClasses[size as 'sm' | 'md' | 'lg']} ${disabledClasses} ${className}`}
       onClick={onClick}
       disabled={disabled}
     >

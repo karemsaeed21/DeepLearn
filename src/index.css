@@ -128,3 +128,178 @@
         inset 0 2px 4px rgba(99, 102, 241, 0.05),
         0 0 0 2px rgba(99, 102, 241, 0.1);
 }
+
+/* Chat message formatting */
+.prose {
+    max-width: 100%;
+    line-height: 1.5;
+}
+
+.prose code.inline-code {
+    background-color: #f0f0f0;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: #d6336c;
+}
+
+.dark .prose code.inline-code {
+    background-color: #4a5568;
+    color: #feb2b2;
+}
+
+.prose strong {
+    font-weight: 600;
+    color: inherit;
+}
+
+.prose em {
+    font-style: italic;
+}
+
+/* Code block container */
+.code-block-container {
+    margin: 1em 0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: #f3f4f6;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.dark .code-block-header {
+    background-color: #2d3748;
+}
+
+.code-block-language {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.dark .code-block-language {
+    color: #9ca3af;
+}
+
+.code-block-copy-btn {
+    font-size: 0.75rem;
+    color: #4f46e5;
+    cursor: pointer;
+}
+
+.dark .code-block-copy-btn {
+    color: #818cf8;
+}
+
+.code-block-copy-btn:hover {
+    text-decoration: underline;
+}
+
+/* Syntax highlighting */
+pre[class*="language-"] {
+    margin: 0;
+    padding: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    background-color: #f8fafc !important;
+}
+
+.dark pre[class*="language-"] {
+    background-color: #1e293b !important;
+}
+
+/* Chat message formatting */
+.prose {
+    max-width: 100%;
+    line-height: 1.5;
+}
+
+.prose code.inline-code {
+    background-color: #f0f0f0;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: #d6336c;
+}
+
+.dark .prose code.inline-code {
+    background-color: #4a5568;
+    color: #feb2b2;
+}
+
+/* Add this to your global CSS */
+pre[class*="language-"] {
+    background: #000000 !important;
+}
+
+pre[class*="language-"] code {
+    color: #f8f8f2;
+    /* Light grey text */
+    text-shadow: none !important;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+    color: #999;
+}
+
+.token.punctuation {
+    color: #ccc;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+    color: #f92672;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+    color: #a6e22e;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+    color: #f8f8f2;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+    color: #66d9ef;
+}
+
+.token.function {
+    color: #fd971f;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+    color: #fd971f;
+}
+
+
+
+/* Add all the other CSS styles from the previous answer */

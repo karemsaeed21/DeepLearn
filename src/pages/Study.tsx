@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import Card from '../components/ui/Card'; // Assuming Card component exists
-import Button from '../components/ui/Button'; // Assuming Button component exists
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
@@ -20,7 +20,8 @@ import {
   Quote,
   FolderPlus,
   Undo2,
-  Sparkles, // Icon for Explain
+  Sparkles,
+  Clipboard,
 } from 'lucide-react';
 
 interface Note {
@@ -39,8 +40,7 @@ interface Folder {
   createdAt: Date;
 }
 
-// --- VERY IMPORTANT SECURITY WARNING ---
-const GEMINI_API_KEY = "AIzaSyDP5-ltToP59wrwEXQzX7UWfebYhSL_ZpU"; // <<<< REPLACE THIS!
+const GEMINI_API_KEY = "AIzaSyDP5-ltToP59wrwEXQzX7UWfebYhSL_ZpU";
 
 function useDebouncedCallback(callback: (...args: any[]) => void, delay: number) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,10 +85,10 @@ const Notes: React.FC = () => {
   const [showParaphrase, setShowParaphrase] = useState(false);
   const [paraphraseInstruction, setParaphraseInstruction] = useState('');
 
-  const [explaining, setExplaining] = useState(false); // New state for Explain feature
-  const [explanation, setExplanation] = useState(''); // New state for Explanation content
-  const [showExplanation, setShowExplanation] = useState(false); // New state for Explanation modal
-  const [explanationInstruction, setExplanationInstruction] = useState(''); // New state for Explanation refinement
+  const [explaining, setExplaining] = useState(false);
+  const [explanation, setExplanation] = useState('');
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [explanationInstruction, setExplanationInstruction] = useState('');
 
   const [trashedNotes, setTrashedNotes] = useState<Note[]>(() => {
     const savedTrashed = localStorage.getItem('trashed-notes');
@@ -127,9 +127,7 @@ const Notes: React.FC = () => {
     } else if (editor && !activeNote && !editor.isEmpty) {
       editor.commands.setContent('<p></p>');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNote?.id, activeNote?.content, editor]);
-
 
   useEffect(() => {
     if (editor && isEditing) {
@@ -146,6 +144,20 @@ const Notes: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('trashed-notes', JSON.stringify(trashedNotes));
   }, [trashedNotes]);
+
+  const formatAIResponse = (text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>')
+      .replace(/^<p>/, '')
+      .replace(/<\/p>$/, '');
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text.replace(/<[^>]*>/g, ''));
+  };
 
   const createNewNote = () => {
     if (newNoteFolder && !folders.find((folder) => folder.id === newNoteFolder)) {
@@ -250,29 +262,13 @@ const Notes: React.FC = () => {
     }
   };
 
-  const EditorMenuBar: React.FC<{ editor: any }> = ({ editor }) => {
-    if (!editor) return null;
-    return (
-      <div className="border-b border-gray-200 pb-4 mb-4 flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={editor.isActive('bold') ? 'bg-gray-200' : ''}><Bold className="h-4 w-4" /></Button>
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={editor.isActive('italic') ? 'bg-gray-200' : ''}><Italic className="h-4 w-4" /></Button>
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={editor.isActive('heading', { level: 1 }) ? 'bg-gray-200' : ''}><Heading1 className="h-4 w-4" /></Button>
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={editor.isActive('heading', { level: 2 }) ? 'bg-gray-200' : ''}><Heading2 className="h-4 w-4" /></Button>
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={editor.isActive('heading', { level: 3 }) ? 'bg-gray-200' : ''}><Heading3 className="h-4 w-4" /></Button>
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'bg-gray-200' : ''}><List className="h-4 w-4" /></Button>
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={editor.isActive('orderedList') ? 'bg-gray-200' : ''}><ListOrdered className="h-4 w-4" /></Button>
-        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={editor.isActive('blockquote') ? 'bg-gray-200' : ''}><Quote className="h-4 w-4" /></Button>
-      </div>
-    );
-  };
-
   const callGeminiAPI = async (
     promptText: string,
     setLoadingState: (loading: boolean) => void,
     setContentState: (content: string | ((prev: string) => string)) => void,
     setErrorState: (errorMsg: string) => void
   ) => {
-    if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GOOGLE_AI_API_KEY_HERE") {
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GOOGLE_AI_API_KEY_HERE" as string) {
       setErrorState("Error: API Key not configured. Please set your Google AI API Key.");
       setLoadingState(false);
       return;
@@ -291,7 +287,7 @@ const Notes: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: promptText }] }],
-          generationConfig: { /* temperature: 0.7, maxOutputTokens: 1024 */ }, // Increased max tokens for explanation
+          generationConfig: {},
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -325,12 +321,12 @@ const Notes: React.FC = () => {
               const textChunk = json.candidates?.[0]?.content?.parts?.[0]?.text;
               if (textChunk) {
                 accumulatedContent += textChunk;
-                setContentState(accumulatedContent);
+                setContentState(prev => prev + formatAIResponse(textChunk));
               }
               if (json.error) {
                 console.error("Error in stream from API:", json.error);
                 accumulatedContent += `\n[API Stream Error: ${json.error.message || 'Unknown error in stream'}]`;
-                setContentState(accumulatedContent);
+                setContentState(prev => prev + `\n[API Stream Error: ${json.error.message || 'Unknown error in stream'}]`);
               }
             } catch (e) {
               console.warn('Error parsing JSON line from stream:', jsonString, e);
@@ -346,6 +342,21 @@ const Notes: React.FC = () => {
     }
   };
 
+  const EditorMenuBar: React.FC<{ editor: any }> = ({ editor }) => {
+    if (!editor) return null;
+    return (
+      <div className="border-b border-gray-200 pb-4 mb-4 flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={editor.isActive('bold') ? 'bg-gray-200' : ''}><Bold className="h-4 w-4" /></Button>
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={editor.isActive('italic') ? 'bg-gray-200' : ''}><Italic className="h-4 w-4" /></Button>
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={editor.isActive('heading', { level: 1 }) ? 'bg-gray-200' : ''}><Heading1 className="h-4 w-4" /></Button>
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={editor.isActive('heading', { level: 2 }) ? 'bg-gray-200' : ''}><Heading2 className="h-4 w-4" /></Button>
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={editor.isActive('heading', { level: 3 }) ? 'bg-gray-200' : ''}><Heading3 className="h-4 w-4" /></Button>
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'bg-gray-200' : ''}><List className="h-4 w-4" /></Button>
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={editor.isActive('orderedList') ? 'bg-gray-200' : ''}><ListOrdered className="h-4 w-4" /></Button>
+        <Button variant="outline" size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={editor.isActive('blockquote') ? 'bg-gray-200' : ''}><Quote className="h-4 w-4" /></Button>
+      </div>
+    );
+  };
 
   return (
     <div className="container mx-auto px-4 pt-10 pb-20">
@@ -402,12 +413,12 @@ const Notes: React.FC = () => {
                           <h3 className="font-medium text-gray-900">{note.title}</h3>
                           <p className="text-sm text-gray-500 mt-1">{new Date(note.updatedAt).toLocaleDateString()}</p>
                         </div>
-                        {activeFolder !== 'trash' && (<Button variant="ghost" size="icon" title="Delete" onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="text-red-500 hover:text-red-600"><Trash2 className="h-4 w-4" /></Button>)}
+                        {activeFolder !== 'trash' && (<Button variant="ghost" size="icon" title="Delete" onClick={() => deleteNote(note.id)} className="text-red-500 hover:text-red-600"><Trash2 className="h-4 w-4" /></Button>)}
                       </div>
                       {activeFolder === 'trash' && (
                         <div className="flex items-center gap-1 absolute top-2 right-2">
-                          <Button variant="ghost" size="icon" title="Restore" onClick={(e) => { e.stopPropagation(); setNotes([note, ...notes]); setTrashedNotes(trashedNotes.filter(n => n.id !== note.id)); if (activeNote?.id === note.id) setActiveNote(null); }} className="text-green-600 hover:bg-green-100"><Undo2 className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" title="Delete Forever" onClick={(e) => { e.stopPropagation(); if (confirm('Are you sure you want to permanently delete this note?')) { setTrashedNotes(trashedNotes.filter(n => n.id !== note.id)); if (activeNote?.id === note.id) setActiveNote(null); } }} className="text-red-600 hover:bg-red-100"><Trash2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Restore" onClick={() => { setNotes([note, ...notes]); setTrashedNotes(trashedNotes.filter(n => n.id !== note.id)); if (activeNote?.id === note.id) setActiveNote(null); }} className="text-green-600 hover:bg-green-100"><Undo2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Delete Forever" onClick={() => { if (confirm('Are you sure you want to permanently delete this note?')) { setTrashedNotes(trashedNotes.filter(n => n.id !== note.id)); if (activeNote?.id === note.id) setActiveNote(null); } }} className="text-red-600 hover:bg-red-100"><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       )}
                     </Card>
@@ -457,7 +468,7 @@ const Notes: React.FC = () => {
                         disabled={summarizing || activeFolder === 'trash'}
                         className="flex items-center"
                       >
-                        <Sparkles className="h-4 w-4 mr-2" /> {/* Example icon */}
+                        <Sparkles className="h-4 w-4 mr-2" />
                         {summarizing ? 'Summarizing...' : 'Summarize'}
                       </Button>
                       <Button
@@ -477,19 +488,15 @@ const Notes: React.FC = () => {
                         disabled={paraphrasing || activeFolder === 'trash'}
                         className="flex items-center"
                       >
-                         <Sparkles className="h-4 w-4 mr-2" />
+                        <Sparkles className="h-4 w-4 mr-2" />
                         {paraphrasing ? 'Paraphrasing...' : 'Paraphrase'}
                       </Button>
-                      {/* New Explain Button */}
                       <Button
                         variant="secondary"
                         onClick={async () => {
                           let textToExplain = '';
                           if (editor) {
                             const selection = editor.state.selection;
-                            // For "Explain", it's often better to use just the selected text if available,
-                            // or a smaller portion if nothing is selected (e.g., current paragraph, or ask user to select).
-                            // For now, let's keep it consistent with summarize/paraphrase for simplicity.
                             textToExplain = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
                             if (!textToExplain.trim()) {
                               textToExplain = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
@@ -500,7 +507,7 @@ const Notes: React.FC = () => {
                             setShowExplanation(true);
                             return;
                           }
-                          setShowExplanation(true); // Show modal before API call
+                          setShowExplanation(true);
                           const prompt = `Explain the following text in a clear and detailed way. Break down complex concepts if necessary. Provide examples if it helps clarify the meaning. Keep the tone informative and easy to understand.\n\nText to Explain:\n${textToExplain}`;
                           callGeminiAPI(prompt, setExplaining, setExplanation, (errMsg) => setExplanation(errMsg));
                         }}
@@ -561,117 +568,469 @@ const Notes: React.FC = () => {
         )}
 
         {/* Summary Modal */}
-        {showSummary && (
-          <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">AI Summary</h3>
-              <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200 min-h-[100px] max-h-[300px] overflow-y-auto whitespace-pre-wrap text-gray-700">
-                {summarizing && !summary && "Generating summary..."}
-                {summary}
+      {showSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl shadow-xl">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">AI Summary</h3>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => copyToClipboard(summary)}
+                  title="Copy to clipboard"
+                >
+                  <Clipboard className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowSummary(false)}
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              <input type="text" value={summaryInstruction} onChange={e => setSummaryInstruction(e.target.value)} placeholder="Refine summary (e.g., 'make it shorter') then press Enter" className="w-full border rounded px-3 py-2 mb-4 focus:ring-indigo-500 focus:border-indigo-500"
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter' && summaryInstruction.trim()) {
-                    let textToSummarize = '';
+            </div>
+            
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Original Text</h4>
+                <div className="p-3 bg-gray-50 rounded border border-gray-200 h-64 overflow-y-auto text-sm text-gray-700">
+                  {(() => {
+                    let originalText = '';
                     if (editor) {
                       const selection = editor.state.selection;
-                      textToSummarize = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
-                      if (!textToSummarize.trim()) textToSummarize = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                      originalText = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                      if (!originalText.trim()) originalText = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
                     }
-                    if (!textToSummarize.trim()) { setSummary("No text to summarize."); return; }
-                    const prompt = `Summarize the following text. Instruction: "${summaryInstruction}". Only return the refined summary.\n\nText:\n${textToSummarize}`;
-                    callGeminiAPI(prompt, setSummarizing, setSummary, (errMsg) => setSummary(errMsg));
-                    setSummaryInstruction('');
-                  }
-                }}
-                disabled={summarizing}
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowSummary(false)}>Close</Button>
-                <Button variant="primary" onClick={() => { if (editor && summary && !summary.startsWith("Error:")) { const { from, to } = editor.state.selection; if (from !== to) editor.commands.insertContentAt({ from, to }, summary); else editor.commands.setContent(summary); } setShowSummary(false); }} disabled={!summary || summarizing || summary.startsWith("Error:")}>Accept & Replace</Button>
+                    return originalText || "No text selected";
+                  })()}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Summary</h4>
+                <div className="p-3 bg-green-50 rounded border border-green-200 h-64 overflow-y-auto text-sm text-gray-700">
+                  {summarizing && !summary ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="animate-pulse flex space-x-2">
+                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
+                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
+                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
+                      </div>
+                    </div>
+                  ) : summary.startsWith("Error:") ? (
+                    <div className="text-red-600">{summary}</div>
+                  ) : (
+                    <div 
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: formatAIResponse(summary) }}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={summaryInstruction} 
+                  onChange={e => setSummaryInstruction(e.target.value)}
+                  placeholder="Refine summary (e.g., 'make it shorter', 'focus on key points')"
+                  className="flex-1 border rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && summaryInstruction.trim()) {
+                      let textToSummarize = '';
+                      if (editor) {
+                        const selection = editor.state.selection;
+                        textToSummarize = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                        if (!textToSummarize.trim()) textToSummarize = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                      }
+                      if (!textToSummarize.trim()) { setSummary("No text to summarize."); return; }
+                      const prompt = `Summarize the following text. Instruction: "${summaryInstruction}". Only return the refined summary.\n\nText:\n${textToSummarize}`;
+                      callGeminiAPI(prompt, setSummarizing, setSummary, (errMsg) => setSummary(errMsg));
+                      setSummaryInstruction('');
+                    }
+                  }}
+                  disabled={summarizing}
+                />
+                <Button 
+                  variant="secondary" 
+                  onClick={async () => {
+                    if (summaryInstruction.trim()) {
+                      let textToSummarize = '';
+                      if (editor) {
+                        const selection = editor.state.selection;
+                        textToSummarize = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                        if (!textToSummarize.trim()) textToSummarize = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                      }
+                      if (!textToSummarize.trim()) { setSummary("No text to summarize."); return; }
+                      const prompt = `Summarize the following text. Instruction: "${summaryInstruction}". Only return the refined summary.\n\nText:\n${textToSummarize}`;
+                      callGeminiAPI(prompt, setSummarizing, setSummary, (errMsg) => setSummary(errMsg));
+                      setSummaryInstruction('');
+                    }
+                  }}
+                  disabled={!summaryInstruction.trim() || summarizing}
+                >
+                  Refine
+                </Button>
+              </div>
+              
+              <div className="flex justify-between gap-2">
+                <div className="text-xs text-gray-500">
+                  {summary && !summary.startsWith("Error:") && (
+                    <span>Summary generated {new Date().toLocaleTimeString()}</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      if (editor && summary && !summary.startsWith("Error:")) {
+                        const { from, to } = editor.state.selection;
+                        const formattedSummary = `<div class="ai-summary"><h3>Summary</h3>${formatAIResponse(summary)}</div>`;
+                        if (from !== to) {
+                          editor.commands.insertContentAt({ from, to }, formattedSummary);
+                        } else {
+                          editor.commands.insertContent(formattedSummary);
+                        }
+                      }
+                      setShowSummary(false);
+                    }}
+                    disabled={!summary || summarizing || summary.startsWith("Error:")}
+                  >
+                    Insert to Note
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    onClick={() => {
+                      if (editor && summary && !summary.startsWith("Error:")) {
+                        const formattedSummary = formatAIResponse(summary);
+                        editor.commands.setContent(`<h1>${activeNote?.title || 'Summary'}</h1>${formattedSummary}`);
+                      }
+                      setShowSummary(false);
+                    }}
+                    disabled={!summary || summarizing || summary.startsWith("Error:")}
+                  >
+                    Replace Note
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* Paraphrase Modal */}
-        {showParaphrase && (
-          <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">AI Paraphrase</h3>
-              <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200 min-h-[100px] max-h-[300px] overflow-y-auto whitespace-pre-wrap text-gray-700">
-                {paraphrasing && !paraphrase && "Generating paraphrase..."}
-                {paraphrase}
-              </div>
-              <input type="text" value={paraphraseInstruction} onChange={e => setParaphraseInstruction(e.target.value)} placeholder="Refine paraphrase (e.g., 'make it simpler') then press Enter" className="w-full border rounded px-3 py-2 mb-4 focus:ring-indigo-500 focus:border-indigo-500"
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter' && paraphraseInstruction.trim()) {
-                    let textToParaphrase = '';
-                    if (editor) {
-                      const selection = editor.state.selection;
-                      textToParaphrase = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
-                      if (!textToParaphrase.trim()) textToParaphrase = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
-                    }
-                    if (!textToParaphrase.trim()) { setParaphrase("No text to paraphrase."); return; }
-                    const prompt = `Paraphrase the following text. Instruction: "${paraphraseInstruction}". Only return the refined paraphrased text.\n\nOriginal Text:\n${textToParaphrase}`;
-                    callGeminiAPI(prompt, setParaphrasing, setParaphrase, (errMsg) => setParaphrase(errMsg));
-                    setParaphraseInstruction('');
-                  }
-                }}
-                disabled={paraphrasing}
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowParaphrase(false)}>Close</Button>
-                <Button variant="primary" onClick={() => { if (editor && paraphrase && !paraphrase.startsWith("Error:")) { const { from, to } = editor.state.selection; if (from !== to) editor.commands.insertContentAt({ from, to }, paraphrase); else editor.commands.setContent(paraphrase); } setShowParaphrase(false); }} disabled={!paraphrase || paraphrasing || paraphrase.startsWith("Error:")}>Accept & Replace</Button>
+      {showParaphrase && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl shadow-xl">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">AI Paraphrase</h3>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => copyToClipboard(paraphrase)}
+                  title="Copy to clipboard"
+                >
+                  <Clipboard className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowParaphrase(false)}
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Explanation Modal (New) */}
-        {showExplanation && (
-          <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">AI Explanation</h3>
-              <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200 min-h-[150px] max-h-[400px] overflow-y-auto whitespace-pre-wrap text-gray-700">
-                {explaining && !explanation && "Generating explanation..."}
-                {explanation}
-              </div>
-              <input
-                type="text"
-                value={explanationInstruction}
-                onChange={e => setExplanationInstruction(e.target.value)}
-                placeholder="Refine explanation (e.g., 'explain like I'm 5', 'more technical detail') then press Enter"
-                className="w-full border rounded px-3 py-2 mb-4 focus:ring-indigo-500 focus:border-indigo-500"
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter' && explanationInstruction.trim()) {
-                    let textToExplain = '';
+            
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Original Text</h4>
+                <div className="p-3 bg-gray-50 rounded border border-gray-200 h-64 overflow-y-auto text-sm text-gray-700">
+                  {(() => {
+                    let originalText = '';
                     if (editor) {
-                      // It's good practice to re-fetch the original text for refinement
-                      // to avoid explaining a previous explanation or error message.
                       const selection = editor.state.selection;
-                      textToExplain = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
-                      if (!textToExplain.trim()) {
-                        textToExplain = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                      originalText = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                      if (!originalText.trim()) originalText = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                    }
+                    return originalText || "No text selected";
+                  })()}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Paraphrased Version</h4>
+                <div className="p-3 bg-green-50 rounded border border-green-200 h-64 overflow-y-auto text-sm text-gray-700">
+                  {paraphrasing && !paraphrase ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="animate-pulse flex space-x-2">
+                        <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+                        <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+                        <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+                      </div>
+                    </div>
+                  ) : paraphrase.startsWith("Error:") ? (
+                    <div className="text-red-600">{paraphrase}</div>
+                  ) : (
+                    <div 
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: formatAIResponse(paraphrase) }}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={paraphraseInstruction} 
+                  onChange={e => setParaphraseInstruction(e.target.value)}
+                  placeholder="Refine paraphrase (e.g., 'make it simpler', 'more formal')"
+                  className="flex-1 border rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && paraphraseInstruction.trim()) {
+                      let textToParaphrase = '';
+                      if (editor) {
+                        const selection = editor.state.selection;
+                        textToParaphrase = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                        if (!textToParaphrase.trim()) textToParaphrase = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
                       }
+                      if (!textToParaphrase.trim()) { setParaphrase("No text to paraphrase."); return; }
+                      const prompt = `Paraphrase the following text. Instruction: "${paraphraseInstruction}". Only return the refined paraphrased text.\n\nOriginal Text:\n${textToParaphrase}`;
+                      callGeminiAPI(prompt, setParaphrasing, setParaphrase, (errMsg) => setParaphrase(errMsg));
+                      setParaphraseInstruction('');
                     }
-                    if (!textToExplain.trim()) { setExplanation("No text to explain for refinement."); return; }
-                    const prompt = `Explain the following text. Instruction for refinement: "${explanationInstruction}". Provide a clear and detailed explanation. Break down complex concepts if necessary. Provide examples if it helps clarify the meaning.\n\nText to Explain:\n${textToExplain}`;
-                    callGeminiAPI(prompt, setExplaining, setExplanation, (errMsg) => setExplanation(errMsg));
-                    setExplanationInstruction('');
-                  }
-                }}
-                disabled={explaining}
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowExplanation(false)}>Close</Button>
-                {/* For "Explain", usually you don't replace content, but you might want to copy or append.
-                    For now, let's just have a close button. You can add an "Append to note" or "Copy" button if needed. */}
+                  }}
+                  disabled={paraphrasing}
+                />
+                <Button 
+                  variant="secondary" 
+                  onClick={async () => {
+                    if (paraphraseInstruction.trim()) {
+                      let textToParaphrase = '';
+                      if (editor) {
+                        const selection = editor.state.selection;
+                        textToParaphrase = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                        if (!textToParaphrase.trim()) textToParaphrase = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                      }
+                      if (!textToParaphrase.trim()) { setParaphrase("No text to paraphrase."); return; }
+                      const prompt = `Paraphrase the following text. Instruction: "${paraphraseInstruction}". Only return the refined paraphrased text.\n\nOriginal Text:\n${textToParaphrase}`;
+                      callGeminiAPI(prompt, setParaphrasing, setParaphrase, (errMsg) => setParaphrase(errMsg));
+                      setParaphraseInstruction('');
+                    }
+                  }}
+                  disabled={!paraphraseInstruction.trim() || paraphrasing}
+                >
+                  Refine
+                </Button>
+              </div>
+              
+              <div className="flex justify-between gap-2">
+                <div className="text-xs text-gray-500">
+                  {paraphrase && !paraphrase.startsWith("Error:") && (
+                    <span>Paraphrase generated {new Date().toLocaleTimeString()}</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      if (editor && paraphrase && !paraphrase.startsWith("Error:")) {
+                        const { from, to } = editor.state.selection;
+                        const formattedParaphrase = `<div class="ai-paraphrase"><h3>Paraphrased Version</h3>${formatAIResponse(paraphrase)}</div>`;
+                        if (from !== to) {
+                          editor.commands.insertContentAt({ from, to }, formattedParaphrase);
+                        } else {
+                          editor.commands.insertContent(formattedParaphrase);
+                        }
+                      }
+                      setShowParaphrase(false);
+                    }}
+                    disabled={!paraphrase || paraphrasing || paraphrase.startsWith("Error:")}
+                  >
+                    Insert to Note
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    onClick={() => {
+                      if (editor && paraphrase && !paraphrase.startsWith("Error:")) {
+                        const formattedParaphrase = formatAIResponse(paraphrase);
+                        editor.commands.setContent(`<h1>${activeNote?.title || 'Paraphrased Content'}</h1>${formattedParaphrase}`);
+                      }
+                      setShowParaphrase(false);
+                    }}
+                    disabled={!paraphrase || paraphrasing || paraphrase.startsWith("Error:")}
+                  >
+                    Replace Note
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
+        {/* Explanation Modal */}
+      {showExplanation && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl shadow-xl">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">AI Explanation</h3>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => copyToClipboard(explanation)}
+                  title="Copy to clipboard"
+                >
+                  <Clipboard className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowExplanation(false)}
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Original Text</h4>
+                <div className="p-3 bg-gray-50 rounded border border-gray-200 h-64 overflow-y-auto text-sm text-gray-700">
+                  {(() => {
+                    let originalText = '';
+                    if (editor) {
+                      const selection = editor.state.selection;
+                      originalText = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                      if (!originalText.trim()) originalText = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                    }
+                    return originalText || "No text selected";
+                  })()}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Detailed Explanation</h4>
+                <div className="p-3 bg-green-50 rounded border border-green-200 h-64 overflow-y-auto text-sm text-gray-700">
+                  {explaining && !explanation ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="animate-pulse flex space-x-2">
+                        <div className="h-2 w-2 bg-purple-400 rounded-full"></div>
+                        <div className="h-2 w-2 bg-purple-400 rounded-full"></div>
+                        <div className="h-2 w-2 bg-purple-400 rounded-full"></div>
+                      </div>
+                    </div>
+                  ) : explanation.startsWith("Error:") ? (
+                    <div className="text-red-600">{explanation}</div>
+                  ) : (
+                    <div 
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: formatAIResponse(explanation) }}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={explanationInstruction} 
+                  onChange={e => setExplanationInstruction(e.target.value)}
+                  placeholder="Refine explanation (e.g., 'simpler terms', 'more technical', 'with examples')"
+                  className="flex-1 border rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && explanationInstruction.trim()) {
+                      let textToExplain = '';
+                      if (editor) {
+                        const selection = editor.state.selection;
+                        textToExplain = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                        if (!textToExplain.trim()) textToExplain = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                      }
+                      if (!textToExplain.trim()) { setExplanation("No text to explain."); return; }
+                      const prompt = `Explain the following text. Instruction: "${explanationInstruction}". Provide a clear and detailed explanation.\n\nText to Explain:\n${textToExplain}`;
+                      callGeminiAPI(prompt, setExplaining, setExplanation, (errMsg) => setExplanation(errMsg));
+                      setExplanationInstruction('');
+                    }
+                  }}
+                  disabled={explaining}
+                />
+                <Button 
+                  variant="secondary" 
+                  onClick={async () => {
+                    if (explanationInstruction.trim()) {
+                      let textToExplain = '';
+                      if (editor) {
+                        const selection = editor.state.selection;
+                        textToExplain = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                        if (!textToExplain.trim()) textToExplain = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+                      }
+                      if (!textToExplain.trim()) { setExplanation("No text to explain."); return; }
+                      const prompt = `Explain the following text. Instruction: "${explanationInstruction}". Provide a clear and detailed explanation.\n\nText to Explain:\n${textToExplain}`;
+                      callGeminiAPI(prompt, setExplaining, setExplanation, (errMsg) => setExplanation(errMsg));
+                      setExplanationInstruction('');
+                    }
+                  }}
+                  disabled={!explanationInstruction.trim() || explaining}
+                >
+                  Refine
+                </Button>
+              </div>
+              
+              <div className="flex justify-between gap-2">
+                <div className="text-xs text-gray-500">
+                  {explanation && !explanation.startsWith("Error:") && (
+                    <span>Explanation generated {new Date().toLocaleTimeString()}</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      if (editor && explanation && !explanation.startsWith("Error:")) {
+                        const { from, to } = editor.state.selection;
+                        const formattedExplanation = `<div class="ai-explanation"><h3>Explanation</h3>${formatAIResponse(explanation)}</div>`;
+                        if (from !== to) {
+                          editor.commands.insertContentAt({ from, to }, formattedExplanation);
+                        } else {
+                          editor.commands.insertContent(formattedExplanation);
+                        }
+                      }
+                      setShowExplanation(false);
+                    }}
+                    disabled={!explanation || explaining || explanation.startsWith("Error:")}
+                  >
+                    Insert to Note
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    onClick={() => {
+                      if (editor && explanation && !explanation.startsWith("Error:")) {
+                        const formattedExplanation = formatAIResponse(explanation);
+                        editor.commands.setContent(`<h1>${activeNote?.title || 'Detailed Explanation'}</h1>${formattedExplanation}`);
+                      }
+                      setShowExplanation(false);
+                    }}
+                    disabled={!explanation || explaining || explanation.startsWith("Error:")}
+                  >
+                    Replace Note
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
