@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { useEditor, EditorContent} from '@tiptap/react';
+import { useEditor, EditorContent, Extension, Node, NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
@@ -19,38 +19,12 @@ import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import { DragHandle } from './DragHandle';
-import {
-  Plus,
-  Edit2,
-  Trash2,
-  Save,
-  X,
-  Bold,
-  Italic,
-  Heading1,
-  Heading2,
-  Heading3,
-  List,
-  ListOrdered,
-  Quote,
-  FolderPlus,
-  Undo2,
-  Sparkles,
-  Code,
-  CheckSquare,
-  Image as ImageIcon,
-  Link as LinkIcon,
-  Table as TableIcon,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Strikethrough,
-  Underline as UnderlineIcon,
-  Highlighter,
-} from 'lucide-react';
+import {Plus,Edit2,Trash2, Save, X, Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Quote, FolderPlus, Undo2,Sparkles, Code, CheckSquare, Image as ImageIcon, Link as LinkIcon, Table as TableIcon, AlignLeft, AlignCenter, AlignRight, Strikethrough, Underline as UnderlineIcon, Highlighter, Type, ListChecks, Sigma} from 'lucide-react';
 import { callGeminiAPI, generateAIPrompt } from '../lib/aiUtils';
 import { AIModal } from '../components/ai/AIModel';
 import 'highlight.js/styles/github-dark.css';
+import 'katex/dist/katex.min.css';
+import katex from 'katex';
 import javascript from 'highlight.js/lib/languages/javascript';
 import typescript from 'highlight.js/lib/languages/typescript';
 import python from 'highlight.js/lib/languages/python';
@@ -67,9 +41,10 @@ import css from 'highlight.js/lib/languages/css';
 import json from 'highlight.js/lib/languages/json';
 import yaml from 'highlight.js/lib/languages/yaml';
 import markdown from 'highlight.js/lib/languages/markdown';
-// import { Root } from 'lowlight';
 import hljs from 'highlight.js/lib/core';
+import html2pdf from 'html2pdf.js';
 
+// Register languages with highlight.js
 hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('typescript', typescript);
 hljs.registerLanguage('python', python);
@@ -86,6 +61,134 @@ hljs.registerLanguage('css', css);
 hljs.registerLanguage('json', json);
 hljs.registerLanguage('yaml', yaml);
 hljs.registerLanguage('markdown', markdown);
+
+// Register languages with lowlight
+lowlight.registerLanguage('javascript', javascript);
+lowlight.registerLanguage('typescript', typescript);
+lowlight.registerLanguage('python', python);
+lowlight.registerLanguage('java', java);
+lowlight.registerLanguage('cpp', cpp);
+lowlight.registerLanguage('csharp', csharp);
+lowlight.registerLanguage('php', php);
+lowlight.registerLanguage('ruby', ruby);
+lowlight.registerLanguage('go', go);
+lowlight.registerLanguage('rust', rust);
+lowlight.registerLanguage('sql', sql);
+lowlight.registerLanguage('html', html);
+lowlight.registerLanguage('css', css);
+lowlight.registerLanguage('json', json);
+lowlight.registerLanguage('yaml', yaml);
+lowlight.registerLanguage('markdown', markdown);
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    latex: {
+      setLatex: (content: string) => ReturnType
+    }
+  }
+}
+
+declare module '@tiptap/core' {
+  interface EditorOptions {
+    onEditLatex?: (content: string, update: (newContent: string) => void) => void;
+  }
+}
+
+// Define LaTeX Node
+const LatexNode = Node.create({
+  name: 'latex',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return {
+      content: {
+        default: '',
+        parseHTML: element => element.getAttribute('data-latex') || '',
+        renderHTML: attributes => {
+          return ['div', { 'data-latex': attributes.content, class: 'latex-equation' }];
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-latex]',
+        getAttrs: element => ({
+          content: element.getAttribute('data-latex') || '',
+        }),
+      },
+    ];
+  },
+  renderHTML({ node }) {
+    return ['div', { 'data-latex': node.attrs.content, class: 'latex-equation' }];
+  },
+  addCommands() {
+    return {
+      setLatex: (content: string) => ({ commands }) => {
+        return commands.insertContent({
+          type: this.name,
+          attrs: { content },
+        });
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(LatexNodeView);
+  },
+});
+
+// Add LatexEditContext
+const LatexEditContext = React.createContext<{
+  setShowModal: (show: boolean) => void;
+  setContent: (content: string) => void;
+  setEditingLatex: (latex: { content: string; update: (content: string) => void } | null) => void;
+} | null>(null);
+
+// Update LatexNodeView
+const LatexNodeView = (props: any) => {
+  const { node, updateAttributes } = props;
+  const latexContext = React.useContext(LatexEditContext);
+  const content = typeof node.attrs.content === 'string' ? node.attrs.content : '';
+  let rendered = '';
+  
+  try {
+    const cleanContent = content.replace(/^\$\$|\$\$$/g, '').trim();
+    rendered = cleanContent
+      ? katex.renderToString(cleanContent, { throwOnError: false, displayMode: true })
+      : '<span class="latex-error">No equation provided.</span>';
+  } catch (e) {
+    rendered = `<span class="latex-error">Error rendering equation</span>`;
+  }
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (latexContext) {
+      latexContext.setContent(content);
+      latexContext.setEditingLatex({
+        content,
+        update: (newContent: string) => {
+          updateAttributes({ content: newContent });
+        }
+      });
+      latexContext.setShowModal(true);
+    }
+  };
+
+  return (
+    <NodeViewWrapper as="div" className="latex-equation group relative" data-latex={content} contentEditable={false}>
+      <span dangerouslySetInnerHTML={{ __html: rendered }} />
+      <button
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-white border rounded px-2 py-1 text-xs"
+        onClick={handleEdit}
+        type="button"
+      >
+        Edit
+      </button>
+    </NodeViewWrapper>
+  );
+};
 
 interface Note {
   id: string;
@@ -114,35 +217,15 @@ function useDebouncedCallback(callback: (...args: any[]) => void, delay: number)
   };
 }
 
-// Register languages with lowlight
-lowlight.registerLanguage('javascript', javascript);
-lowlight.registerLanguage('typescript', typescript);
-lowlight.registerLanguage('python', python);
-lowlight.registerLanguage('java', java);
-lowlight.registerLanguage('cpp', cpp);
-lowlight.registerLanguage('csharp', csharp);
-lowlight.registerLanguage('php', php);
-lowlight.registerLanguage('ruby', ruby);
-lowlight.registerLanguage('go', go);
-lowlight.registerLanguage('rust', rust);
-lowlight.registerLanguage('sql', sql);
-lowlight.registerLanguage('html', html);
-lowlight.registerLanguage('css', css);
-lowlight.registerLanguage('json', json);
-lowlight.registerLanguage('yaml', yaml);
-lowlight.registerLanguage('markdown', markdown);
-
 const Notes: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>(() => {
     const savedNotes = localStorage.getItem('learning-notes');
     return savedNotes ? JSON.parse(savedNotes) : [];
   });
-
   const [folders, setFolders] = useState<Folder[]>(() => {
     const savedFolders = localStorage.getItem('note-folders');
     return savedFolders ? JSON.parse(savedFolders) : [];
   });
-
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
@@ -160,7 +243,7 @@ const Notes: React.FC = () => {
   });
 
   const [aiState, setAiState] = useState<{
-    type: 'summary' | 'paraphrase' | 'explanation' | null;
+    type: 'summary' | 'paraphrase' | 'explanation' | 'fix-spelling' | 'improve-writing' | 'simplify' | null;
     content: string;
     instruction: string;
     isLoading: boolean;
@@ -173,8 +256,15 @@ const Notes: React.FC = () => {
     isError: false
   });
 
-  // Add this state to track editor initialization
-  // const [isEditorReady, setIsEditorReady] = useState(false);
+  const [showLatexModal, setShowLatexModal] = useState(false);
+  const [latexContent, setLatexContent] = useState('');
+  const [editingLatex, setEditingLatex] = useState<{ content: string, update: (newContent: string) => void } | null>(null);
+
+  const latexContextValue = React.useMemo(() => ({
+    setShowModal: setShowLatexModal,
+    setContent: setLatexContent,
+    setEditingLatex
+  }), []);
 
   const editor = useEditor({
     extensions: [
@@ -204,13 +294,13 @@ const Notes: React.FC = () => {
       }),
       TaskList.configure({
         HTMLAttributes: {
-          class: 'not-prose pl-2',
+          class: 'not-prose pl-2 space-y-2',
         },
       }),
       TaskItem.configure({
         nested: true,
         HTMLAttributes: {
-          class: 'flex items-start gap-2',
+          class: 'flex items-start gap-2 my-1',
         },
       }),
       CodeBlockLowlight.configure({
@@ -219,6 +309,7 @@ const Notes: React.FC = () => {
           class: 'code-block bg-[#0d1117] text-white p-4 rounded-lg overflow-x-auto my-4 border border-gray-700',
         },
         defaultLanguage: 'javascript',
+        languageClassPrefix: 'language-'
       }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
@@ -235,9 +326,12 @@ const Notes: React.FC = () => {
       }),
       Link.configure({
         HTMLAttributes: {
-          class: 'link',
+          class: 'text-blue-600 hover:text-blue-800 underline',
         },
         openOnClick: false,
+        linkOnPaste: true,
+        autolink: true,
+        protocols: ['http', 'https', 'mailto', 'tel'],
       }),
       Image.configure({
         HTMLAttributes: {
@@ -250,9 +344,15 @@ const Notes: React.FC = () => {
       TableRow,
       TableCell,
       TableHeader,
+      LatexNode,
     ],
     content: '',
     editable: isEditing && activeFolder !== 'trash',
+    onEditLatex: (content: string, update: (newContent: string) => void) => {
+      setShowLatexModal(true);
+      setLatexContent(content);
+      setEditingLatex({ content, update });
+    },
     onUpdate: ({ editor }) => {
       if (activeNote) {
         const content = editor.getHTML();
@@ -268,7 +368,6 @@ const Notes: React.FC = () => {
     editorProps: {
       handleKeyDown: (view, event) => {
         if (!editor) return false;
-        
         // Tab in code block: insert spaces
         if (event.key === 'Tab') {
           const { state } = view;
@@ -278,24 +377,23 @@ const Notes: React.FC = () => {
           
           if (node.type.name === 'codeBlock') {
             event.preventDefault();
+            // Only insert spaces
             const tr = state.tr.insertText('  ', selection.from);
             view.dispatch(tr);
             return true;
           }
-          
           // Tab in bullet/ordered list: indent (nest)
           if (editor.isActive('bulletList') || editor.isActive('orderedList')) {
             // Let TipTap/ProseMirror handle it (default behavior)
             return false;
           }
-          
           // Otherwise, insert tab character
           event.preventDefault();
           const tr = state.tr.insertText('\t', selection.from);
           view.dispatch(tr);
           return true;
         }
-        
+
         if (event.key === 'Enter' && event.shiftKey) {
           editor.chain().focus().setHardBreak().run();
           return true;
@@ -306,6 +404,20 @@ const Notes: React.FC = () => {
         }
         if (event.key === 'Backspace' && event.ctrlKey) {
           editor.chain().focus().deleteNode('paragraph').run();
+          return true;
+        }
+        // Add keyboard shortcuts for task list and links
+        if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          const url = window.prompt('Enter URL:');
+          if (url) {
+            editor.chain().focus().setLink({ href: url }).run();
+          }
+          return true;
+        }
+        if (event.key === 't' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          editor.chain().focus().toggleTaskList().run();
           return true;
         }
         return false;
@@ -342,7 +454,7 @@ const Notes: React.FC = () => {
   // Update content when activeNote changes
   useEffect(() => {
     if (editor && activeNote) {
-      editor.commands.setContent(activeNote.content || '');
+      editor.commands.setContent(activeNote.content);
     }
   }, [activeNote?.id, editor]);
 
@@ -360,7 +472,6 @@ const Notes: React.FC = () => {
   // Add keyboard shortcuts for common actions
   useEffect(() => {
     if (!editor) return;
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey) {
         switch (event.key.toLowerCase()) {
@@ -375,13 +486,6 @@ const Notes: React.FC = () => {
           case 'u':
             event.preventDefault();
             editor.chain().focus().toggleUnderline().run();
-            break;
-          case 'k':
-            event.preventDefault();
-            const url = window.prompt('Enter URL:');
-            if (url) {
-              editor.chain().focus().toggleLink({ href: url }).run();
-            }
             break;
           case 'z':
             event.preventDefault();
@@ -440,11 +544,15 @@ const Notes: React.FC = () => {
   };
 
   const updateNote = (updatedNote: Note) => {
+    if (!editor) return;
+    const latestContent = editor.getHTML(); // Always get the latest HTML from the editor
     const updatedNotes = notes.map((note) =>
-      note.id === updatedNote.id ? { ...updatedNote, updatedAt: new Date() } : note
+      note.id === updatedNote.id
+        ? { ...updatedNote, content: latestContent, updatedAt: new Date() }
+        : note
     );
     setNotes(updatedNotes);
-    setActiveNote(updatedNote);
+    setActiveNote({ ...updatedNote, content: latestContent });
     setIsEditing(false);
   };
 
@@ -507,7 +615,7 @@ const Notes: React.FC = () => {
     }
   };
 
-  const handleAIAction = async (type: 'summary' | 'paraphrase' | 'explanation') => {
+  const handleAIAction = async (type: 'summary' | 'paraphrase' | 'explanation' | 'fix-spelling' | 'improve-writing' | 'simplify') => {
     let textToProcess = '';
     if (editor) {
       const selection = editor.state.selection;
@@ -540,13 +648,13 @@ const Notes: React.FC = () => {
     await callGeminiAPI(
       prompt,
       GEMINI_API_KEY,
-      (content: any) => {
+      (content) => {
         setAiState(prev => ({
           ...prev,
           content: prev.content + content
         }));
       },
-      (error: any) => {
+      (error) => {
         setAiState(prev => ({
           ...prev,
           content: error,
@@ -593,13 +701,13 @@ const Notes: React.FC = () => {
     await callGeminiAPI(
       prompt,
       GEMINI_API_KEY,
-      (content: any) => {
+      (content) => {
         setAiState(prev => ({
           ...prev,
           content: prev.content + content
         }));
       },
-      (error: any) => {
+      (error) => {
         setAiState(prev => ({
           ...prev,
           content: error,
@@ -640,7 +748,19 @@ const Notes: React.FC = () => {
   const handleAIReplace = () => {
     if (!editor || !aiState.content || aiState.isError || !aiState.type) return;
 
-    editor.commands.setContent(`<h1>${activeNote?.title || aiState.type.charAt(0).toUpperCase() + aiState.type.slice(1)}</h1>${aiState.content}`);
+    const { from, to } = editor.state.selection;
+    const hasSelection = from !== to;
+
+    if (hasSelection) {
+      // Replace only the selected text
+      editor.commands.insertContentAt(
+        { from, to },
+        `<div class="ai-${aiState.type}"><h3>${aiState.type.charAt(0).toUpperCase() + aiState.type.slice(1)}</h3>${aiState.content}</div>`
+      );
+    } else {
+      // Replace entire note content
+      editor.commands.setContent(`<h1>${activeNote?.title || aiState.type.charAt(0).toUpperCase() + aiState.type.slice(1)}</h1>${aiState.content}`);
+    }
     
     setAiState({
       type: null,
@@ -667,6 +787,80 @@ const Notes: React.FC = () => {
     }
     e.target.value = '';
   };
+
+  const handleLatexInsert = () => {
+    if (latexContent.trim()) {
+      try {
+        const cleanContent = latexContent.replace(/^\$\$|\$\$$/g, '').trim();
+        katex.renderToString(cleanContent, { throwOnError: true, displayMode: true });
+        
+        if (editingLatex) {
+          // Update existing equation
+          editingLatex.update(cleanContent);
+          setEditingLatex(null);
+        } else if (editor) {
+          // Insert new equation
+          editor.chain().focus().setLatex(cleanContent).run();
+        }
+        
+        setLatexContent('');
+        setShowLatexModal(false);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Invalid LaTeX equation: ${errorMessage}`);
+      }
+    } else {
+      alert('Equation cannot be empty!');
+    }
+  };
+
+  const renderLatexPreview = (content: string) => {
+    if (!content.trim()) return null;
+    
+    try {
+      const cleanContent = content.replace(/^\$\$|\$\$$/g, '').trim();
+      const rendered = katex.renderToString(cleanContent, {
+        throwOnError: true,
+        displayMode: true,
+      });
+      return <div dangerouslySetInnerHTML={{ __html: rendered }} />;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return <div className="text-red-500">Error: {errorMessage}</div>;
+    }
+  };
+
+  // Add CSS for LaTeX equations
+  const latexStyles = `
+    .latex-equation {
+      margin: 1em 0;
+      text-align: center;
+      overflow-x: auto;
+      padding: 1em;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+    .latex-equation .katex {
+      font-size: 1.1em;
+    }
+    .latex-error {
+      color: #dc2626;
+      padding: 0.5em;
+      background-color: #fee2e2;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  `;
+
+  // Add the styles to the document
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = latexStyles;
+    document.head.appendChild(styleElement);
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
 
   const EditorMenuBar: React.FC<{ editor: any }> = ({ editor }) => {
     if (!editor) return null;
@@ -866,6 +1060,48 @@ const Notes: React.FC = () => {
               <LinkIcon className="h-4 w-4" />
             </Button>
           </div>
+
+          <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => handleAIAction('fix-spelling')}
+              className="p-1.5 text-gray-600 hover:text-gray-900"
+              title="Fix Spelling"
+            >
+              <Type className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => handleAIAction('improve-writing')}
+              className="p-1.5 text-gray-600 hover:text-gray-900"
+              title="Improve Writing"
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => handleAIAction('simplify')}
+              className="p-1.5 text-gray-600 hover:text-gray-900"
+              title="Simplify Language"
+            >
+              <ListChecks className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowLatexModal(true)}
+              className="p-1.5 text-gray-600 hover:text-gray-900"
+              title="Insert LaTeX Equation"
+            >
+              <Sigma className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -915,7 +1151,8 @@ const Notes: React.FC = () => {
     setIsEditing(false);
     // Force content update when selecting a note
     if (editor) {
-      editor.commands.setContent(note.content || '');
+      console.log(note.content);
+      editor.commands.setContent(note.content);
     }
   };
 
@@ -923,7 +1160,8 @@ const Notes: React.FC = () => {
   const handleEditClick = () => {
     if (activeNote && editor) {
       setIsEditing(true);
-      editor.commands.setContent(activeNote.content || '');
+      console.log(activeNote.content);
+      editor.commands.setContent(activeNote.content);
     }
   };
 
@@ -937,7 +1175,8 @@ const Notes: React.FC = () => {
       setActiveNote(null);
       setIsEditing(false);
       if (editor) {
-        editor.commands.setContent('');
+        console.log(note.content);
+        editor.commands.setContent(note.content);
       }
     }
   };
@@ -950,401 +1189,469 @@ const Notes: React.FC = () => {
         setActiveNote(null);
         setIsEditing(false);
         if (editor) {
-          editor.commands.setContent('');
+          console.log(note.content);
+          editor.commands.setContent(note.content);
         }
       }
     }
   };
+  const handleExportPDF = () => {
+    // Find the element containing the note content
+    const noteElement = document.getElementById('note-content-to-export');
+    if (!noteElement) return;
+    html2pdf().from(noteElement).save(`${activeNote?.title || 'note'}.pdf`);
+  };
 
-  // const handleDeleteNote = (e: React.MouseEvent<HTMLButtonElement>) => {
-  //   e.stopPropagation();
-  //   const noteId = e.currentTarget.dataset.noteId;
-  //   if (noteId) {
-  //     deleteNote(noteId);
-  //   }
-  // };
+  useEffect(() => {
+    // Only run in view mode
+    document.querySelectorAll('.latex-equation').forEach(div => {
+      const latex = div.getAttribute('data-latex');
+      if (latex && div.innerHTML.trim() === '') {
+        try {
+          div.innerHTML = katex.renderToString(latex, { throwOnError: false, displayMode: true });
+        } catch (e) {
+          div.innerHTML = '<span class="latex-error">Error rendering equation</span>';
+        }
+      }
+    });
+  }, [activeNote?.content]);
 
   return (
-    <div className="container mx-auto px-4 pt-10 pb-20">
-      <div className="max-w-6xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Study Notes</h1>
-          <p className="mt-2 text-gray-600">Organize your learning materials, summaries, and study notes.</p>
-        </motion.div>
+    <LatexEditContext.Provider value={latexContextValue}>
+      <div className="container mx-auto px-4 pt-10 pb-20">
+        <div className="max-w-6xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">Study Notes</h1>
+            <p className="mt-2 text-gray-600">Organize your learning materials, summaries, and study notes.</p>
+          </motion.div>
 
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar */}
-          <div className="lg:w-1/4">
-            <div className="space-y-3 mb-6">
-              <Button variant="primary" onClick={() => { setNewNoteFolder(activeFolder); setShowNewNoteModal(true); }} className="w-full flex items-center justify-center"><Plus className="h-4 w-4 mr-2" />New Note</Button>
-              <Button variant="outline" onClick={() => setShowNewFolderDialog(true)} className="w-full flex items-center justify-center"><FolderPlus className="h-4 w-4 mr-2" />New Folder</Button>
-            </div>
-            <div className="mb-6">
-              <h3 className="font-medium text-gray-700 mb-2">Folders</h3>
-              <div className="space-y-2">
-                <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, null)} className="p-2 rounded-lg hover:bg-gray-50">
-                  <button onClick={() => setActiveFolder(null)} className={`w-full text-left px-3 py-2 rounded-lg ${activeFolder === null ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}>All Notes</button>
-                </div>
-                <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'trash')} className="p-2 rounded-lg hover:bg-gray-50">
-                  <button onClick={() => setActiveFolder('trash')} className={`w-full text-left px-3 py-2 rounded-lg ${activeFolder === 'trash' ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50'}`}>🗑️ Trash</button>
-                </div>
-                {folders.map((folder) => (
-                  <div key={folder.id} className="flex items-center justify-between" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, folder.id)}>
-                    {editingFolderId === folder.id ? (
-                      <div className="flex-1 flex items-center">
-                        <input type="text" value={editingFolderName} onChange={(e) => setEditingFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') updateFolderName(folder.id); if (e.key === 'Escape') { setEditingFolderId(null); setEditingFolderName(''); } }} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
-                        <button onClick={() => updateFolderName(folder.id)} className="ml-2 text-green-500 hover:text-green-600"><Save className="h-4 w-4" /></button>
-                        <button onClick={() => { setEditingFolderId(null); setEditingFolderName(''); }} className="ml-2 text-red-500 hover:text-red-600"><X className="h-4 w-4" /></button>
-                      </div>
-                    ) : (
-                      <>
-                        <button onClick={() => setActiveFolder(folder.id)} className={`flex-1 text-left px-3 py-2 rounded-lg ${activeFolder === folder.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}>{folder.name}</button>
-                        <div className="flex items-center">
-                          <button onClick={() => { setEditingFolderId(folder.id); setEditingFolderName(folder.name); }} className="text-gray-400 hover:text-blue-500 ml-2"><Edit2 className="h-4 w-4" /></button>
-                          <button onClick={() => deleteFolder(folder.id)} className="text-gray-400 hover:text-red-500 ml-2"><Trash2 className="h-4 w-4" /></button>
-                        </div>
-                      </>
-                    )}
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Sidebar */}
+            <div className="lg:w-1/4">
+              <div className="space-y-3 mb-6">
+                <Button variant="primary" onClick={() => { setNewNoteFolder(activeFolder); setShowNewNoteModal(true); }} className="w-full flex items-center justify-center"><Plus className="h-4 w-4 mr-2" />New Note</Button>
+                <Button variant="outline" onClick={() => setShowNewFolderDialog(true)} className="w-full flex items-center justify-center"><FolderPlus className="h-4 w-4 mr-2" />New Folder</Button>
+              </div>
+              <div className="mb-6">
+                <h3 className="font-medium text-gray-700 mb-2">Folders</h3>
+                <div className="space-y-2">
+                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, null)} className="p-2 rounded-lg hover:bg-gray-50">
+                    <button onClick={() => setActiveFolder(null)} className={`w-full text-left px-3 py-2 rounded-lg ${activeFolder === null ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}>All Notes</button>
                   </div>
+                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'trash')} className="p-2 rounded-lg hover:bg-gray-50">
+                    <button onClick={() => setActiveFolder('trash')} className={`w-full text-left px-3 py-2 rounded-lg ${activeFolder === 'trash' ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50'}`}>🗑️ Trash</button>
+                  </div>
+                  {folders.map((folder) => (
+                    <div key={folder.id} className="flex items-center justify-between" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, folder.id)}>
+                      {editingFolderId === folder.id ? (
+                        <div className="flex-1 flex items-center">
+                          <input type="text" value={editingFolderName} onChange={(e) => setEditingFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') updateFolderName(folder.id); if (e.key === 'Escape') { setEditingFolderId(null); setEditingFolderName(''); } }} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+                          <button onClick={() => updateFolderName(folder.id)} className="ml-2 text-green-500 hover:text-green-600"><Save className="h-4 w-4" /></button>
+                          <button onClick={() => { setEditingFolderId(null); setEditingFolderName(''); }} className="ml-2 text-red-500 hover:text-red-600"><X className="h-4 w-4" /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <button onClick={() => setActiveFolder(folder.id)} className={`flex-1 text-left px-3 py-2 rounded-lg ${activeFolder === folder.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}>{folder.name}</button>
+                          <div className="flex items-center">
+                            <button onClick={() => { setEditingFolderId(folder.id); setEditingFolderName(folder.name); }} className="text-gray-400 hover:text-blue-500 ml-2"><Edit2 className="h-4 w-4" /></button>
+                            <button onClick={() => deleteFolder(folder.id)} className="text-gray-400 hover:text-red-500 ml-2"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-3">
+                {filteredNotes.map((note) => (
+                  <motion.div key={note.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+                    <div draggable={activeFolder !== 'trash'} onDragStart={(e: React.DragEvent<HTMLDivElement>) => handleDragStart(e, note.id)}>
+                      <Card 
+                        hoverable 
+                        className={`p-4 cursor-pointer relative ${activeNote?.id === note.id ? 'border-indigo-500 bg-indigo-50' : ''}`} 
+                        onClick={() => handleNoteSelect(note)}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-medium text-gray-900">{note.title}</div>
+                            <p className="text-sm text-gray-500 mt-1">{new Date(note.updatedAt).toLocaleDateString()}</p>
+                          </div>
+                          {activeFolder !== 'trash' && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              title="Delete" 
+                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.stopPropagation();
+                                deleteNote(note.id);
+                              }}
+                              className="text-red-500 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        {activeFolder === 'trash' && (
+                          <div className="flex items-center gap-1 absolute top-2 right-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              title="Restore" 
+                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.stopPropagation();
+                                handleRestoreNote(note.id);
+                              }}
+                              className="text-green-600 hover:bg-green-100"
+                            >
+                              <Undo2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              title="Delete Forever" 
+                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.stopPropagation();
+                                handleDeleteForever(note.id);
+                              }}
+                              className="text-red-600 hover:bg-red-100"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
+                    </div>
+                  </motion.div>
                 ))}
+                {filteredNotes.length === 0 && (<div className="text-center py-8 text-gray-500">No notes in this {activeFolder === 'trash' ? 'trash' : activeFolder ? 'folder' : 'view'}.</div>)}
               </div>
             </div>
-            <div className="space-y-3">
-              {filteredNotes.map((note) => (
-                <motion.div key={note.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                  <div draggable={activeFolder !== 'trash'} onDragStart={(e: React.DragEvent<HTMLDivElement>) => handleDragStart(e, note.id)}>
-                    <Card 
-                      hoverable 
-                      className={`p-4 cursor-pointer relative ${activeNote?.id === note.id ? 'border-indigo-500 bg-indigo-50' : ''}`} 
-                      onClick={() => handleNoteSelect(note)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium text-gray-900">{note.title}</h3>
-                          <p className="text-sm text-gray-500 mt-1">{new Date(note.updatedAt).toLocaleDateString()}</p>
+
+            {/* Note Editor */}
+            <div className="lg:w-3/4">
+              {activeNote && notes.find(n => n.id === activeNote.id) ? (
+                <Card className="p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-900">{activeNote.title}</h2>
+                    <div className="flex gap-2">
+                      {!isEditing && activeFolder !== 'trash' && (
+                        <Button 
+                          variant="outline" 
+                          onClick={handleEditClick} 
+                          className="flex items-center"
+                        >
+                          <Edit2 className="h-4 w-4 mr-2" />Edit
+                        </Button>
+                      )}
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        title="Close" 
+                        onClick={() => { 
+                          setActiveNote(null); 
+                          setIsEditing(false); 
+                          if (editor) {
+                            console.log(activeNote.content);
+                            editor.commands.setContent(activeNote.content);
+                          }
+                        }} 
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <X className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  </div>
+                  {isEditing && activeFolder !== 'trash' ? (
+                    <div className="space-y-4">
+                      <input 
+                        type="text" 
+                        value={activeNote?.title || ''} 
+                        onChange={(e) => setActiveNote(prev => prev ? { ...prev, title: e.target.value } : null)} 
+                        className="w-full text-xl font-bold border-b border-gray-200 pb-2 focus:outline-none focus:border-indigo-500" 
+                        placeholder="Note Title" 
+                      />
+                      <EditorMenuBar editor={editor} />
+                      {!editor ? (
+                        <div className="flex justify-center items-center h-40">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
                         </div>
-                        {activeFolder !== 'trash' && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Delete" 
-                            onClick={() => deleteNote(note.id)}
-                            className="text-red-500 hover:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      {activeFolder === 'trash' && (
-                        <div className="flex items-center gap-1 absolute top-2 right-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Restore" 
-                            onClick={() => handleRestoreNote(note.id)}
-                            className="text-green-600 hover:bg-green-100"
-                          >
-                            <Undo2 className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Delete Forever" 
-                            onClick={() => handleDeleteForever(note.id)}
-                            className="text-red-600 hover:bg-red-100"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                      ) : (
+                        <div className="relative">
+                          <style>
+                            {`
+                              .prose h1 { font-size: 1.875rem; font-weight: 700; margin: 1rem 0; }
+                              .prose h2 { font-size: 1.5rem; font-weight: 700; margin: 0.75rem 0; }
+                              .prose h3 { font-size: 1.25rem; font-weight: 700; margin: 0.5rem 0; }
+                              .prose h4 { font-size: 1.125rem; font-weight: 600; margin: 0.5rem 0; }
+                              .prose h5 { font-size: 1rem; font-weight: 600; margin: 0.25rem 0; }
+                              .prose h6 { font-size: 0.875rem; font-weight: 600; margin: 0.25rem 0; }
+                            `}
+                          </style>
+                          <EditorContent
+                            editor={editor}
+                            className="w-full h-[400px] max-h-[400px] border border-gray-300 rounded-lg focus:outline-none p-4 transition-shadow focus:ring-2 focus:ring-indigo-200 overflow-y-auto prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none
+                              [&_.ProseMirror]:min-h-[300px]
+                              [&_.ProseMirror]:outline-none
+                              [&_.ProseMirror]:overflow-y-auto
+                              [&_.ProseMirror]:scrollbar-thin
+                              [&_.ProseMirror]:scrollbar-thumb-gray-300
+                              [&_.ProseMirror]:scrollbar-track-transparent
+                              [&_.ProseMirror_p]:my-2
+                              [&_.ProseMirror_h1]:text-3xl
+                              [&_.ProseMirror_h1]:font-bold
+                              [&_.ProseMirror_h1]:my-4
+                              [&_.ProseMirror_h2]:text-2xl
+                              [&_.ProseMirror_h2]:font-bold
+                              [&_.ProseMirror_h2]:my-3
+                              [&_.ProseMirror_h3]:text-xl
+                              [&_.ProseMirror_h3]:font-bold
+                              [&_.ProseMirror_h3]:my-2
+                              [&_.ProseMirror_ul]:my-2
+                              [&_.ProseMirror_ol]:my-2
+                              [&_.ProseMirror_li]:my-1
+                              [&_.ProseMirror_blockquote]:border-l-4
+                              [&_.ProseMirror_blockquote]:border-gray-300
+                              [&_.ProseMirror_blockquote]:pl-4
+                              [&_.ProseMirror_blockquote]:italic
+                              [&_.ProseMirror_code]:bg-gray-100
+                              [&_.ProseMirror_code]:px-1
+                              [&_.ProseMirror_code]:py-0.5
+                              [&_.ProseMirror_code]:rounded
+                              [&_.ProseMirror_pre]:bg-[#0d1117]
+                              [&_.ProseMirror_pre]:text-white
+                              [&_.ProseMirror_pre]:p-4
+                              [&_.ProseMirror_pre]:rounded-lg
+                              [&_.ProseMirror_pre]:overflow-x-auto
+                              [&_.ProseMirror_pre]:my-4
+                              [&_.ProseMirror_pre]:border
+                              [&_.ProseMirror_pre]:border-gray-700
+                              [&_.ProseMirror_pre_code]:text-sm
+                              [&_.ProseMirror_pre_code]:font-mono
+                              [&_.ProseMirror_pre_code]:block
+                              [&_.ProseMirror_pre_code]:overflow-x-auto
+                              [&_.ProseMirror_pre_code]:whitespace-pre
+                              [&_.ProseMirror_pre_code]:p-0
+                              [&_.ProseMirror_pre_code]:bg-transparent
+                              [&_.ProseMirror_pre_code]:text-inherit
+                              [&_.ProseMirror_pre_code]:border-0
+                              [&_.ProseMirror_pre_code]:rounded-none
+                              [&_.ProseMirror_pre_code]:shadow-none
+                              [&_.ProseMirror_pre_code]:before:content-none
+                              [&_.ProseMirror_pre_code]:after:content-none
+                              [&_.ProseMirror_pre_code_.hljs-keyword]:text-[#ff7b72]
+                              [&_.ProseMirror_pre_code_.hljs-string]:text-[#a5d6ff]
+                              [&_.ProseMirror_pre_code_.hljs-number]:text-[#79c0ff]
+                              [&_.ProseMirror_pre_code_.hljs-function]:text-[#d2a8ff]
+                              [&_.ProseMirror_pre_code_.hljs-comment]:text-[#8b949e]
+                              [&_.ProseMirror_pre_code_.hljs-attr]:text-[#7ee787]
+                              [&_.ProseMirror_pre_code_.hljs-selector-tag]:text-[#ff7b72]
+                              [&_.ProseMirror_pre_code_.hljs-selector-class]:text-[#7ee787]
+                              [&_.ProseMirror_pre_code_.hljs-selector-id]:text-[#7ee787]
+                              [&_.ProseMirror_pre_code_.hljs-selector-attr]:text-[#7ee787]
+                              [&_.ProseMirror_pre_code_.hljs-selector-pseudo]:text-[#7ee787]
+                              [&_.ProseMirror_pre_code_.hljs-attribute]:text-[#7ee787]
+                              [&_.ProseMirror_pre_code_.hljs-variable]:text-[#ffa657]
+                              [&_.ProseMirror_pre_code_.hljs-template-variable]:text-[#ffa657]
+                              [&_.ProseMirror_pre_code_.hljs-regexp]:text-[#ff7b72]
+                              [&_.ProseMirror_pre_code_.hljs-link]:text-[#a5d6ff]
+                              [&_.ProseMirror_pre_code_.hljs-symbol]:text-[#ffa657]
+                              [&_.ProseMirror_pre_code_.hljs-bullet]:text-[#ffa657]
+                              [&_.ProseMirror_pre_code_.hljs-built_in]:text-[#ffa657]
+                              [&_.ProseMirror_pre_code_.hljs-addition]:text-[#7ee787]
+                              [&_.ProseMirror_pre_code_.hljs-deletion]:text-[#ff7b72]
+                              [&_.ProseMirror_pre_code_.hljs-emphasis]:italic
+                              [&_.ProseMirror_pre_code_.hljs-strong]:font-bold
+                              [&_.ProseMirror_task-list]:list-none
+                              [&_.ProseMirror_task-list]:pl-0
+                              [&_.ProseMirror_task-item]:flex
+                              [&_.ProseMirror_task-item]:items-start
+                              [&_.ProseMirror_task-item]:gap-2
+                              [&_.ProseMirror_task-item]:my-1
+                              [&_.ProseMirror_task-item_input]:mt-1
+                              [&_.ProseMirror_task-item_input]:h-4
+                              [&_.ProseMirror_task-item_input]:w-4
+                              [&_.ProseMirror_task-item_input]:rounded
+                              [&_.ProseMirror_task-item_input]:border-gray-300
+                              [&_.ProseMirror_task-item_input]:text-blue-600
+                              [&_.ProseMirror_task-item_input]:focus:ring-blue-500" 
+                          />
+                          {editor && <DragHandle editor={editor} />}
                         </div>
                       )}
-                    </Card>
-                  </div>
-                </motion.div>
-              ))}
-              {filteredNotes.length === 0 && (<div className="text-center py-8 text-gray-500">No notes in this {activeFolder === 'trash' ? 'trash' : activeFolder ? 'folder' : 'view'}.</div>)}
+                      <div className="flex justify-end space-x-3">
+                        <Button variant="outline" onClick={() => { setIsEditing(false); if (editor && activeNote) editor.commands.setContent(notes.find(n => n.id === activeNote.id)?.content || activeNote.content); }} className="flex items-center"><X className="h-4 w-4 mr-2" />Cancel</Button>
+                        <Button variant="primary" onClick={() => updateNote(activeNote)} className="flex items-center"><Save className="h-4 w-4 mr-2" />Save</Button>
+                      </div>
+                      {/* AI Buttons */}
+                      <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleAIAction('summary')}
+                          disabled={aiState.isLoading || activeFolder === 'trash'}
+                          className="flex items-center"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          {aiState.isLoading && aiState.type === 'summary' ? 'Summarizing...' : 'Summarize'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleAIAction('paraphrase')}
+                          disabled={aiState.isLoading || activeFolder === 'trash'}
+                          className="flex items-center"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          {aiState.isLoading && aiState.type === 'paraphrase' ? 'Paraphrasing...' : 'Paraphrase'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleAIAction('explanation')}
+                          disabled={aiState.isLoading || activeFolder === 'trash'}
+                          className="flex items-center"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          {aiState.isLoading && aiState.type === 'explanation' ? 'Explaining...' : 'Explain'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <style>
+                        {`
+                          .prose h1 { font-size: 1.875rem; font-weight: 700; margin: 1rem 0; }
+                          .prose h2 { font-size: 1.5rem; font-weight: 700; margin: 0.75rem 0; }
+                          .prose h3 { font-size: 1.25rem; font-weight: 700; margin: 0.5rem 0; }
+                          .prose h4 { font-size: 1.125rem; font-weight: 600; margin: 0.5rem 0; }
+                          .prose h5 { font-size: 1rem; font-weight: 600; margin: 0.25rem 0; }
+                          .prose h6 { font-size: 0.875rem; font-weight: 600; margin: 0.25rem 0; }
+                        `}
+                      </style>
+                      <div
+                        id="note-content-to-export"
+                        className="prose max-w-none w-full h-[400px] max-h-[400px] border border-gray-300 rounded-lg p-4 overflow-y-auto"
+                        dangerouslySetInnerHTML={{ __html: processContentWithHighlighting(activeNote?.content || '') }}
+                      />
+                      <Button
+                        variant="secondary"
+                        onClick={handleExportPDF}
+                        className="flex items-center mt-4"
+                      >
+                        Export as PDF
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              ) : (
+                <div className="text-center py-12 bg-gray-50 rounded-lg">
+                  <h3 className="text-xl font-medium text-gray-700 mb-2">Select a note to view or edit</h3>
+                  <p className="text-gray-500">Or create a new note to start taking notes</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Note Editor */}
-          <div className="lg:w-3/4">
-            {activeNote && notes.find(n => n.id === activeNote.id) ? (
-              <Card className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">{activeNote.title}</h2>
-                  <div className="flex gap-2">
-                    {!isEditing && activeFolder !== 'trash' && (
-                      <Button 
-                        variant="outline" 
-                        onClick={handleEditClick} 
-                        className="flex items-center"
-                      >
-                        <Edit2 className="h-4 w-4 mr-2" />Edit
-                      </Button>
-                    )}
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      title="Close" 
-                      onClick={() => { 
-                        setActiveNote(null); 
-                        setIsEditing(false); 
-                        if (editor) {
-                          editor.commands.setContent('');
-                        }
-                      }} 
-                      className="text-gray-400 hover:text-red-500"
-                    >
-                      <X className="h-5 w-5" />
-                    </Button>
+          {/* New Folder Dialog */}
+          {showNewFolderDialog && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Create New Folder</h3>
+                <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder name" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4" onKeyDown={(e) => e.key === 'Enter' && createNewFolder()} />
+                <div className="flex justify-end space-x-3">
+                  <Button variant="outline" onClick={() => { setNewFolderName(''); setShowNewFolderDialog(false); }}>Cancel</Button>
+                  <Button variant="primary" onClick={createNewFolder}>Create</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* New Note Modal */}
+          {showNewNoteModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Create New Note</h3>
+                <input type="text" value={newNoteTitle} onChange={(e) => setNewNoteTitle(e.target.value)} placeholder="Note Title" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4" />
+                <textarea value={newNoteContent} onChange={(e) => setNewNoteContent(e.target.value)} placeholder="Note Content (optional)" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4 h-32" />
+                <select value={newNoteFolder || ''} onChange={(e) => setNewNoteFolder(e.target.value || null)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4">
+                  <option value="">Quick Note (No Folder)</option>
+                  {folders.map((folder) => (<option key={folder.id} value={folder.id}>{folder.name}</option>))}
+                </select>
+                <div className="flex justify-end space-x-3">
+                  <Button variant="outline" onClick={() => setShowNewNoteModal(false)}>Cancel</Button>
+                  <Button variant="primary" onClick={createNewNote}>Create Note</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Modal */}
+          {aiState.type && (
+            <AIModal
+              title={`AI ${aiState.type.charAt(0).toUpperCase() + aiState.type.slice(1)}`}
+              content={aiState.content}
+              originalText={(() => {
+                if (!editor) return '';
+                const selection = editor.state.selection;
+                const text = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
+                return text || editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
+              })()}
+              instruction={aiState.instruction}
+              setInstruction={(instruction: any) => setAiState(prev => ({ ...prev, instruction }))}
+              onRefine={handleAIRefine}
+              onInsert={handleAIInsert}
+              onReplace={handleAIReplace}
+              onClose={() => setAiState({
+                type: null,
+                content: '',
+                instruction: '',
+                isLoading: false,
+                isError: false
+              })}
+              isLoading={aiState.isLoading}
+              isError={aiState.isError}
+            />
+          )}
+
+          {/* Add LaTeX Modal */}
+          {showLatexModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Insert LaTeX Equation</h3>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Enter LaTeX equation:
+                  </label>
+                  <textarea
+                    value={latexContent}
+                    onChange={(e) => setLatexContent(e.target.value)}
+                    placeholder="Enter LaTeX equation (e.g., E = mc^2 or \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a})"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 h-32 font-mono"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Preview:
+                  </label>
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-lg min-h-[50px] overflow-x-auto">
+                    {renderLatexPreview(latexContent)}
                   </div>
                 </div>
-                {isEditing && activeFolder !== 'trash' ? (
-                  <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      value={activeNote?.title || ''} 
-                      onChange={(e) => setActiveNote(prev => prev ? { ...prev, title: e.target.value } : null)} 
-                      className="w-full text-xl font-bold border-b border-gray-200 pb-2 focus:outline-none focus:border-indigo-500" 
-                      placeholder="Note Title" 
-                    />
-                    <EditorMenuBar editor={editor} />
-                    {!editor ? (
-                      <div className="flex justify-center items-center h-40">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        <style>
-                          {`
-                            .prose h1 { font-size: 1.875rem; font-weight: 700; margin: 1rem 0; }
-                            .prose h2 { font-size: 1.5rem; font-weight: 700; margin: 0.75rem 0; }
-                            .prose h3 { font-size: 1.25rem; font-weight: 700; margin: 0.5rem 0; }
-                            .prose h4 { font-size: 1.125rem; font-weight: 600; margin: 0.5rem 0; }
-                            .prose h5 { font-size: 1rem; font-weight: 600; margin: 0.25rem 0; }
-                            .prose h6 { font-size: 0.875rem; font-weight: 600; margin: 0.25rem 0; }
-                          `}
-                        </style>
-                        <EditorContent
-                          editor={editor}
-                          className="w-full h-[400px] max-h-[400px] border border-gray-300 rounded-lg focus:outline-none p-4 transition-shadow focus:ring-2 focus:ring-indigo-200 overflow-y-auto prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none
-                            [&_.ProseMirror]:min-h-[300px]
-                            [&_.ProseMirror]:outline-none
-                            [&_.ProseMirror]:overflow-y-auto
-                            [&_.ProseMirror]:scrollbar-thin
-                            [&_.ProseMirror]:scrollbar-thumb-gray-300
-                            [&_.ProseMirror]:scrollbar-track-transparent
-                            [&_.ProseMirror_p]:my-2
-                            [&_.ProseMirror_h1]:text-3xl
-                            [&_.ProseMirror_h1]:font-bold
-                            [&_.ProseMirror_h1]:my-4
-                            [&_.ProseMirror_h2]:text-2xl
-                            [&_.ProseMirror_h2]:font-bold
-                            [&_.ProseMirror_h2]:my-3
-                            [&_.ProseMirror_h3]:text-xl
-                            [&_.ProseMirror_h3]:font-bold
-                            [&_.ProseMirror_h3]:my-2
-                            [&_.ProseMirror_ul]:my-2
-                            [&_.ProseMirror_ol]:my-2
-                            [&_.ProseMirror_li]:my-1
-                            [&_.ProseMirror_blockquote]:border-l-4
-                            [&_.ProseMirror_blockquote]:border-gray-300
-                            [&_.ProseMirror_blockquote]:pl-4
-                            [&_.ProseMirror_blockquote]:italic
-                            [&_.ProseMirror_code]:bg-gray-100
-                            [&_.ProseMirror_code]:px-1
-                            [&_.ProseMirror_code]:py-0.5
-                            [&_.ProseMirror_code]:rounded
-                            [&_.ProseMirror_pre]:bg-[#0d1117]
-                            [&_.ProseMirror_pre]:text-white
-                            [&_.ProseMirror_pre]:p-4
-                            [&_.ProseMirror_pre]:rounded-lg
-                            [&_.ProseMirror_pre]:overflow-x-auto
-                            [&_.ProseMirror_pre]:my-4
-                            [&_.ProseMirror_pre]:border
-                            [&_.ProseMirror_pre]:border-gray-700
-                            [&_.ProseMirror_pre_code]:text-sm
-                            [&_.ProseMirror_pre_code]:font-mono
-                            [&_.ProseMirror_pre_code]:block
-                            [&_.ProseMirror_pre_code]:overflow-x-auto
-                            [&_.ProseMirror_pre_code]:whitespace-pre
-                            [&_.ProseMirror_pre_code]:p-0
-                            [&_.ProseMirror_pre_code]:bg-transparent
-                            [&_.ProseMirror_pre_code]:text-inherit
-                            [&_.ProseMirror_pre_code]:border-0
-                            [&_.ProseMirror_pre_code]:rounded-none
-                            [&_.ProseMirror_pre_code]:shadow-none
-                            [&_.ProseMirror_pre_code]:before:content-none
-                            [&_.ProseMirror_pre_code]:after:content-none
-                            [&_.ProseMirror_pre_code_.hljs-keyword]:text-[#ff7b72]
-                            [&_.ProseMirror_pre_code_.hljs-string]:text-[#a5d6ff]
-                            [&_.ProseMirror_pre_code_.hljs-number]:text-[#79c0ff]
-                            [&_.ProseMirror_pre_code_.hljs-function]:text-[#d2a8ff]
-                            [&_.ProseMirror_pre_code_.hljs-comment]:text-[#8b949e]
-                            [&_.ProseMirror_pre_code_.hljs-attr]:text-[#7ee787]
-                            [&_.ProseMirror_pre_code_.hljs-selector-tag]:text-[#ff7b72]
-                            [&_.ProseMirror_pre_code_.hljs-selector-class]:text-[#7ee787]
-                            [&_.ProseMirror_pre_code_.hljs-selector-id]:text-[#7ee787]
-                            [&_.ProseMirror_pre_code_.hljs-selector-attr]:text-[#7ee787]
-                            [&_.ProseMirror_pre_code_.hljs-selector-pseudo]:text-[#7ee787]
-                            [&_.ProseMirror_pre_code_.hljs-attribute]:text-[#7ee787]
-                            [&_.ProseMirror_pre_code_.hljs-variable]:text-[#ffa657]
-                            [&_.ProseMirror_pre_code_.hljs-template-variable]:text-[#ffa657]
-                            [&_.ProseMirror_pre_code_.hljs-regexp]:text-[#ff7b72]
-                            [&_.ProseMirror_pre_code_.hljs-link]:text-[#a5d6ff]
-                            [&_.ProseMirror_pre_code_.hljs-symbol]:text-[#ffa657]
-                            [&_.ProseMirror_pre_code_.hljs-bullet]:text-[#ffa657]
-                            [&_.ProseMirror_pre_code_.hljs-built_in]:text-[#ffa657]
-                            [&_.ProseMirror_pre_code_.hljs-addition]:text-[#7ee787]
-                            [&_.ProseMirror_pre_code_.hljs-deletion]:text-[#ff7b72]
-                            [&_.ProseMirror_pre_code_.hljs-emphasis]:italic
-                            [&_.ProseMirror_pre_code_.hljs-strong]:font-bold
-                            [&_.ProseMirror_task-list]:my-2
-                            [&_.ProseMirror_task-item]:flex
-                            [&_.ProseMirror_task-item]:gap-2
-                            [&_.ProseMirror_task-item]:items-start
-                            [&_.ProseMirror_task-item]:my-1
-                            [&_.ProseMirror_task-item_input]:mt-1.5
-                            [&_.ProseMirror_highlight]:bg-yellow-200
-                            [&_.ProseMirror_underline]:underline
-                            [&_.ProseMirror_strike]:line-through
-                            [&_.ProseMirror_placeholder]:text-gray-400
-                            [&_.ProseMirror_placeholder]:pointer-events-none
-                            [&_.ProseMirror_placeholder]:select-none
-                            [&_.ProseMirror_placeholder]:absolute
-                            [&_.ProseMirror_placeholder]:top-0
-                            [&_.ProseMirror_placeholder]:left-0
-                            [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_table]:bg-white
-                            [&_.ProseMirror_table_cell]:border [&_.ProseMirror_table_cell]:border-gray-300 [&_.ProseMirror_table_cell]:bg-white [&_.ProseMirror_table_cell]:p-2
-                            [&_.ProseMirror_table_header]:border [&_.ProseMirror_table_header]:border-gray-300 [&_.ProseMirror_table_header]:bg-gray-100 [&_.ProseMirror_table_header]:p-2" 
-                        />
-                        {editor && <DragHandle editor={editor} />}
-                      </div>
-                    )}
-                    <div className="flex justify-end space-x-3">
-                      <Button variant="outline" onClick={() => { setIsEditing(false); if (editor && activeNote) editor.commands.setContent(notes.find(n => n.id === activeNote.id)?.content || activeNote.content); }} className="flex items-center"><X className="h-4 w-4 mr-2" />Cancel</Button>
-                      <Button variant="primary" onClick={() => updateNote(activeNote)} className="flex items-center"><Save className="h-4 w-4 mr-2" />Save</Button>
-                    </div>
-                    {/* AI Buttons */}
-                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleAIAction('summary')}
-                        disabled={aiState.isLoading || activeFolder === 'trash'}
-                        className="flex items-center"
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {aiState.isLoading && aiState.type === 'summary' ? 'Summarizing...' : 'Summarize'}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleAIAction('paraphrase')}
-                        disabled={aiState.isLoading || activeFolder === 'trash'}
-                        className="flex items-center"
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {aiState.isLoading && aiState.type === 'paraphrase' ? 'Paraphrasing...' : 'Paraphrase'}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleAIAction('explanation')}
-                        disabled={aiState.isLoading || activeFolder === 'trash'}
-                        className="flex items-center"
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {aiState.isLoading && aiState.type === 'explanation' ? 'Explaining...' : 'Explain'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <style>
-                      {`
-                        .prose h1 { font-size: 1.875rem; font-weight: 700; margin: 1rem 0; }
-                        .prose h2 { font-size: 1.5rem; font-weight: 700; margin: 0.75rem 0; }
-                        .prose h3 { font-size: 1.25rem; font-weight: 700; margin: 0.5rem 0; }
-                        .prose h4 { font-size: 1.125rem; font-weight: 600; margin: 0.5rem 0; }
-                        .prose h5 { font-size: 1rem; font-weight: 600; margin: 0.25rem 0; }
-                        .prose h6 { font-size: 0.875rem; font-weight: 600; margin: 0.25rem 0; }
-                      `}
-                    </style>
-                    <div
-                      className="prose max-w-none w-full h-[400px] max-h-[400px] border border-gray-300 rounded-lg p-4 overflow-y-auto"
-                      dangerouslySetInnerHTML={{ __html: processContentWithHighlighting(activeNote?.content || '') }}
-                    />
-                  </div>
-                )}
-              </Card>
-            ) : (
-              <div className="text-center py-12 bg-gray-50 rounded-lg">
-                <h3 className="text-xl font-medium text-gray-700 mb-2">Select a note to view or edit</h3>
-                <p className="text-gray-500">Or create a new note to start taking notes</p>
+                <div className="flex justify-end space-x-3">
+                  <Button variant="outline" onClick={() => { setShowLatexModal(false); setEditingLatex(null); }}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    onClick={handleLatexInsert}
+                    disabled={!latexContent.trim()}
+                  >
+                    Insert Equation
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
-
-        {/* New Folder Dialog */}
-        {showNewFolderDialog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Create New Folder</h3>
-              <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder name" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4" onKeyDown={(e) => e.key === 'Enter' && createNewFolder()} />
-              <div className="flex justify-end space-x-3">
-                <Button variant="outline" onClick={() => { setNewFolderName(''); setShowNewFolderDialog(false); }}>Cancel</Button>
-                <Button variant="primary" onClick={createNewFolder}>Create</Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* New Note Modal */}
-        {showNewNoteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Create New Note</h3>
-              <input type="text" value={newNoteTitle} onChange={(e) => setNewNoteTitle(e.target.value)} placeholder="Note Title" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4" />
-              <textarea value={newNoteContent} onChange={(e) => setNewNoteContent(e.target.value)} placeholder="Note Content (optional)" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4 h-32" />
-              <select value={newNoteFolder || ''} onChange={(e) => setNewNoteFolder(e.target.value || null)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4">
-                <option value="">Quick Note (No Folder)</option>
-                {folders.map((folder) => (<option key={folder.id} value={folder.id}>{folder.name}</option>))}
-              </select>
-              <div className="flex justify-end space-x-3">
-                <Button variant="outline" onClick={() => setShowNewNoteModal(false)}>Cancel</Button>
-                <Button variant="primary" onClick={createNewNote}>Create Note</Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* AI Modal */}
-        {aiState.type && (
-          <AIModal
-            title={`AI ${aiState.type.charAt(0).toUpperCase() + aiState.type.slice(1)}`}
-            content={aiState.content}
-            originalText={(() => {
-              if (!editor) return '';
-              const selection = editor.state.selection;
-              const text = editor.state.doc.textBetween(selection.from, selection.to, '\n\n');
-              return text || editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n\n');
-            })()}
-            instruction={aiState.instruction}
-            setInstruction={(instruction: any) => setAiState(prev => ({ ...prev, instruction }))}
-            onRefine={handleAIRefine}
-            onInsert={handleAIInsert}
-            onReplace={handleAIReplace}
-            onClose={() => setAiState({
-              type: null,
-              content: '',
-              instruction: '',
-              isLoading: false,
-              isError: false
-            })}
-            isLoading={aiState.isLoading}
-            isError={aiState.isError}
-          />
-        )}
       </div>
-    </div>
+    </LatexEditContext.Provider>
   );
 };
 
